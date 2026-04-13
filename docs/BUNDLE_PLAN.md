@@ -7,7 +7,12 @@ Repo bootstrap
 Core contracts, config hardening, security skeleton, scripts
 
 ## Bundle 2
-Data layer and repositories
+Data layer foundation:
+- records
+- repositories
+- sqlite connection helper
+- local schema init
+- migration bootstrap rules
 
 ## Bundle 3
 Jobs and workers

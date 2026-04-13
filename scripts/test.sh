@@ -10,4 +10,5 @@ fi
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install pytest httpx
+./scripts/init_local_db.sh
 pytest -q
