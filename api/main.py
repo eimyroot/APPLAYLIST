@@ -4,6 +4,7 @@ from api.middleware.auth import AuthContextMiddleware
 from api.middleware.cors import install_cors
 from api.routes.health import router as health_router
 from api.routes.jobs import router as jobs_router
+from api.routes.pipeline import router as pipeline_router
 from core.config.settings import get_settings
 from core.logging.logger import configure_logging, get_logger
 
@@ -24,6 +25,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(jobs_router)
+    app.include_router(pipeline_router)
 
     logger.info(
         "app_initialized",
@@ -33,6 +35,7 @@ def create_app() -> FastAPI:
             "security_mode": settings.security_mode,
         },
     )
+
     return app
 
 
