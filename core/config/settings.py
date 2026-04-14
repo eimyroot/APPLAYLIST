@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_version: str = "0.1.0"
+    schema_version: str = "0.1.0"
 
     log_level: str = "INFO"
     log_json: bool = True
@@ -24,7 +25,21 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me"
     jwt_algorithm: str = "HS256"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
+    security_mode: str = "DEV"
+    enable_embeddings: bool = False
+    enable_external_connectors: bool = False
+    enable_advanced_structure: bool = False
+    enable_generative_preview: bool = False
+
+    artifacts_dir: str = "./artifacts"
+    exports_dir: str = "./exports"
+    logs_dir: str = "./logs"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
 
 
 @lru_cache(maxsize=1)

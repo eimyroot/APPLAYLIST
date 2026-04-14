@@ -15,7 +15,11 @@ Data layer foundation:
 - migration bootstrap rules
 
 ## Bundle 3
-Jobs and workers
+Jobs & workers foundation:
+- job manager
+- in-memory queue
+- jobs API
+- worker base scaffold
 
 ## Bundle 4
 Analysis layer extraction
