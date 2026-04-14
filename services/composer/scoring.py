@@ -1,4 +1,9 @@
 from core.harmonic import camelot_compatible
+from services.integrations.spotify_client import SpotifyClient
+from services.intelligence.fusion import fuse_signals
+
+
+spotify = SpotifyClient()
 
 
 def score_transition(a, b) -> float:
@@ -13,5 +18,9 @@ def score_transition(a, b) -> float:
 
     if a.energy and b.energy:
         score += 1 - abs(a.energy - b.energy)
+
+    # --- external intelligence ---
+    external = spotify.get_audio_features(b.track_id)
+    score += fuse_signals(b, external)
 
     return score
