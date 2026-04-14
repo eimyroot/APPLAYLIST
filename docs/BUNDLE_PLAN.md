@@ -22,19 +22,24 @@ Jobs & workers foundation:
 - worker base scaffold
 
 ## Bundle 4
-Analysis layer extraction
+Analysis engine foundation:
+- librosa-backed analyzer
+- bpm / chroma / centroid / zcr feature extraction
+- naive key + camelot mapping
+- analysis persistence through repository
+- analysis worker scaffold
 
 ## Bundle 5
-Composition + validation
+Composer foundation:
+- bpm flow
+- harmonic compatibility
+- energy curve targeting
+- transition scoring
 
 ## Bundle 6
-Export layer
-
-## Bundle 7
-External connectors
-
-## Bundle 8
-Embeddings / vibe AI
-
-## Bundle 9
-Structure AI + explainability
+Export layer:
+- M3U export
+- manifest
+- warnings
+- audit
+- artifact directories
