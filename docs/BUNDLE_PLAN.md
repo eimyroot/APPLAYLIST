@@ -43,3 +43,15 @@ Export layer:
 - warnings
 - audit
 - artifact directories
+
+## Bundle 7
+External intelligence:
+- external signal stub
+- fusion layer
+- composer scoring enrichment
+
+## Bundle 8
+Embeddings + vibe AI:
+- feature-derived embedding vectors
+- cosine similarity search
+- embedding worker scaffold
