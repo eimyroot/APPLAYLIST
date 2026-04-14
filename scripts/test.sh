@@ -9,6 +9,6 @@ fi
 
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install pytest httpx
+python -m pip install pytest httpx numpy scipy soundfile "librosa>=0.10,<0.11"
 ./scripts/init_local_db.sh
 pytest -q
