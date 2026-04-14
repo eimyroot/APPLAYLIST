@@ -55,3 +55,10 @@ Embeddings + vibe AI:
 - feature-derived embedding vectors
 - cosine similarity search
 - embedding worker scaffold
+
+## Bundle 9
+Structure AI + explainability:
+- onset/rms-based structure detection
+- drop candidate estimation
+- section boundaries
+- explainable transition reasons
