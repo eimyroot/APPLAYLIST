@@ -36,3 +36,9 @@ exports/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# STOP DUPLICATES + ICLOUD
+*.icloud
+* 2.*
+* 3.*
+* 4.*
