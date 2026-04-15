@@ -42,3 +42,9 @@ frontend/dist/
 * 2.*
 * 3.*
 * 4.*
+
+# macOS / iCloud junk
+*.icloud
+* 2.*
+* 3.*
+* 4.*
