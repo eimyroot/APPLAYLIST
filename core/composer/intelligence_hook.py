@@ -4,15 +4,15 @@ from typing import Dict, Tuple, List
 from core.config.scoring_config import load_scoring_config
 
 
-def intelligence_contribution(track: Dict) -> Tuple[float, List[Dict]]:
+def intelligence_contribution(track: Dict, context: str | None = None) -> Tuple[float, List[Dict]]:
     intelligence = track.get("intelligence")
     if not intelligence:
         return 0.0, []
 
-    config = load_scoring_config()
+    cfg = load_scoring_config(context)
 
-    club_w = config.get("club_readiness_weight", 0.3)
-    mix_w = config.get("mixability_weight", 0.2)
+    club_w = cfg.get("club_readiness_weight", 0.3)
+    mix_w = cfg.get("mixability_weight", 0.2)
 
     score = 0.0
     reasons = []
@@ -25,7 +25,7 @@ def intelligence_contribution(track: Dict) -> Tuple[float, List[Dict]]:
         score += contrib
         reasons.append({
             "code": "intelligence_club",
-            "label": "Club readiness contribution",
+            "label": f"Club readiness ({context or 'default'})",
             "value": club,
             "weight": club_w,
             "contribution": contrib
@@ -36,7 +36,7 @@ def intelligence_contribution(track: Dict) -> Tuple[float, List[Dict]]:
         score += contrib
         reasons.append({
             "code": "intelligence_mix",
-            "label": "Mixability contribution",
+            "label": f"Mixability ({context or 'default'})",
             "value": mix,
             "weight": mix_w,
             "contribution": contrib

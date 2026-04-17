@@ -4,21 +4,31 @@ import json
 from pathlib import Path
 
 
+DEFAULT_CONTEXT = "default"
+
 DEFAULT = {
-    "club_readiness_weight": 0.3,
-    "mixability_weight": 0.2,
+    "default": {
+        "club_readiness_weight": 0.3,
+        "mixability_weight": 0.2,
+    }
 }
 
 
-def load_scoring_config() -> dict:
+def load_scoring_config(context: str | None = None) -> dict:
     path = Path("data/config/scoring_config.json")
 
     if not path.exists():
-        return DEFAULT
+        cfg = DEFAULT
+    else:
+        try:
+            with path.open() as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = DEFAULT
 
-    try:
-        with path.open() as f:
-            data = json.load(f)
-        return {**DEFAULT, **data}
-    except Exception:
-        return DEFAULT
+    ctx = context or DEFAULT_CONTEXT
+
+    if ctx in cfg:
+        return cfg[ctx]
+
+    return cfg.get("default", DEFAULT["default"])
