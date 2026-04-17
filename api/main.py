@@ -1,3 +1,5 @@
+from api.middleware.request_hardening import RequestHardeningMiddleware
+from api.core.logging_setup import setup_logging
 from fastapi import FastAPI
 
 from api.middleware.auth import AuthContextMiddleware
@@ -15,10 +17,14 @@ def create_app() -> FastAPI:
     logger = get_logger(__name__)
 
     app = FastAPI(
+
         title=settings.app_name,
         version=settings.api_version,
         debug=settings.app_debug,
     )
+
+app.add_middleware(RequestHardeningMiddleware)
+
 
     install_cors(app)
     app.add_middleware(AuthContextMiddleware)
@@ -40,3 +46,15 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+# === SECURITY HARDENING ===
+from api.middleware.security_middleware import SecurityMiddleware
+from api.core.logging import setup_logging
+import os
+
+setup_logging()
+
+app.add_middleware(SecurityMiddleware)
+
+app.state.request_timeout = int(os.getenv("REQUEST_TIMEOUT_SEC", "30"))
