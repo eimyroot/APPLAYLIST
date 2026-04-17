@@ -10,6 +10,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from api.middleware.request_context import ensure_request_id
+
 logger = logging.getLogger("applaylist.api")
 
 
@@ -33,11 +35,15 @@ def _log(event: str, **payload: Any) -> None:
 
 async def log_request_response(request: Request, call_next):
     started = time.time()
+    request_id = ensure_request_id(request)
 
     try:
         response = await call_next(request)
         duration_ms = round((time.time() - started) * 1000, 2)
-        request_id = getattr(request.state, "request_id", None)
+
+        if not response.headers.get("X-Request-ID"):
+            response.headers["X-Request-ID"] = request_id
+
         _log(
             "request_complete",
             request_id=request_id,
@@ -49,7 +55,6 @@ async def log_request_response(request: Request, call_next):
         return response
     except Exception as exc:
         duration_ms = round((time.time() - started) * 1000, 2)
-        request_id = getattr(request.state, "request_id", None)
         _log(
             "request_exception",
             request_id=request_id,
@@ -62,7 +67,7 @@ async def log_request_response(request: Request, call_next):
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    request_id = getattr(request.state, "request_id", None)
+    request_id = ensure_request_id(request)
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -73,11 +78,12 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
                 "request_id": request_id,
             }
         },
+        headers={"X-Request-ID": request_id},
     )
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    request_id = getattr(request.state, "request_id", None)
+    request_id = ensure_request_id(request)
     return JSONResponse(
         status_code=422,
         content={
@@ -89,11 +95,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 "details": exc.errors(),
             }
         },
+        headers={"X-Request-ID": request_id},
     )
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    request_id = getattr(request.state, "request_id", None)
+    request_id = ensure_request_id(request)
     _log(
         "unhandled_exception",
         request_id=request_id,
@@ -111,4 +118,5 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
                 "request_id": request_id,
             }
         },
+        headers={"X-Request-ID": request_id},
     )
