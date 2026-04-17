@@ -28,6 +28,11 @@ class SecuritySettings:
     enable_request_size_guard: bool = _as_bool(os.getenv("ENABLE_REQUEST_SIZE_GUARD"), True)
     enable_rate_limit: bool = _as_bool(os.getenv("ENABLE_RATE_LIMIT"), True)
 
+    # Bundle 13
+    auth_enabled_raw: bool = _as_bool(os.getenv("AUTH_ENABLED"), False)
+    api_key: str = os.getenv("API_KEY", "")
+    api_key_header_name: str = os.getenv("API_KEY_HEADER_NAME", "X-API-Key")
+
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() in {"prod", "production"}
@@ -38,6 +43,12 @@ class SecuritySettings:
         if not raw:
             return ["*"]
         return [item.strip() for item in raw.split(",") if item.strip()]
+
+    @property
+    def auth_enabled(self) -> bool:
+        if self.is_production:
+            return True if self.auth_enabled_raw or self.api_key else False
+        return self.auth_enabled_raw
 
 
 settings = SecuritySettings()
