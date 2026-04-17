@@ -48,3 +48,14 @@ frontend/dist/
 * 2.*
 * 3.*
 * 4.*
+
+# macOS / iCloud garbage
+*.icloud
+.DS_Store
+
+# runtime
+data/cache/
+data/config/path_profiles.json
+
+# backups
+.backup_*
