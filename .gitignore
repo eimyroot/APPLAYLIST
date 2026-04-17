@@ -59,3 +59,17 @@ data/config/path_profiles.json
 
 # backups
 .backup_*
+
+# --- VOODOO CLEAN RULES ---
+*.icloud
+.DS_Store
+*.log
+*.tmp
+*.bak
+__pycache__/
+*.pyc
+.backup_*
+data/cache/
+data/tmp/
+node_modules/
+.env
