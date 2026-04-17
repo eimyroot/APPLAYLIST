@@ -73,3 +73,22 @@ data/cache/
 data/tmp/
 node_modules/
 .env
+# --- APPLAYLIST HARDENING ---
+*.icloud
+.DS_Store
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.backup_*/
+data/tmp/
+.env
+.env.*
+
+api/main.py.bak.*
