@@ -92,3 +92,5 @@ data/tmp/
 .env.*
 
 api/main.py.bak.*
+
+api/main.py.bak.*

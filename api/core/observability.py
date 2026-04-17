@@ -6,10 +6,9 @@ import time
 from typing import Any
 
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.exceptions import RequestValidationError
-
 
 logger = logging.getLogger("applaylist.api")
 
@@ -34,11 +33,11 @@ def _log(event: str, **payload: Any) -> None:
 
 async def log_request_response(request: Request, call_next):
     started = time.time()
-    request_id = getattr(request.state, "request_id", None)
 
     try:
         response = await call_next(request)
         duration_ms = round((time.time() - started) * 1000, 2)
+        request_id = getattr(request.state, "request_id", None)
         _log(
             "request_complete",
             request_id=request_id,
@@ -50,6 +49,7 @@ async def log_request_response(request: Request, call_next):
         return response
     except Exception as exc:
         duration_ms = round((time.time() - started) * 1000, 2)
+        request_id = getattr(request.state, "request_id", None)
         _log(
             "request_exception",
             request_id=request_id,
