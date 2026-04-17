@@ -1,3 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+cp api/main.py "api/main.py.bak.$(date +%Y%m%d_%H%M%S)" || true
+
+cat > api/main.py << 'PYEOF'
 from __future__ import annotations
 
 from fastapi import FastAPI
@@ -37,3 +45,6 @@ app.include_router(pipeline_router)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
+PYEOF
+
+echo "api/main.py repaired for bundle 13"
