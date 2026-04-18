@@ -36,3 +36,75 @@ exports/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# STOP DUPLICATES + ICLOUD
+*.icloud
+* 2.*
+* 3.*
+* 4.*
+
+# macOS / iCloud junk
+*.icloud
+* 2.*
+* 3.*
+* 4.*
+
+# macOS / iCloud garbage
+*.icloud
+.DS_Store
+
+# runtime
+data/cache/
+data/config/path_profiles.json
+
+# backups
+.backup_*
+
+# --- VOODOO CLEAN RULES ---
+*.icloud
+.DS_Store
+*.log
+*.tmp
+*.bak
+__pycache__/
+*.pyc
+.backup_*
+data/cache/
+data/tmp/
+node_modules/
+.env
+# --- APPLAYLIST HARDENING ---
+*.icloud
+.DS_Store
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.backup_*/
+data/tmp/
+.env
+.env.*
+
+api/main.py.bak.*
+
+api/main.py.bak.*
+
+api/main.py.bak.*
+
+api/main.py.bak.*
+
+api/main.py.bak.*
+
+api/main.py.bak.*
+
+api/main.py.bak.*
+
+api/main.py.bak.*
+
+api/main.py.bak.*

@@ -1,0 +1,18 @@
+{
+  "default": {
+    "club_readiness_weight": 0.3,
+    "mixability_weight": 0.2
+  },
+  "warmup": {
+    "club_readiness_weight": 0.15,
+    "mixability_weight": 0.25
+  },
+  "peak": {
+    "club_readiness_weight": 0.5,
+    "mixability_weight": 0.2
+  },
+  "closing": {
+    "club_readiness_weight": 0.2,
+    "mixability_weight": 0.3
+  }
+}
