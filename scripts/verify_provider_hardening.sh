@@ -17,6 +17,7 @@ for f in \
   core/analysis/provider_selection.py \
   core/analysis/provider_registry_bridge.py \
   core/analysis/provider_baseline.py \
+  core/analysis/provider_orchestrator.py \
   docs/architecture/APPLAYLIST_PROVIDER_HARDENING.md \
   docs/ops/PROVIDER_HARDENING_RUNBOOK.md
 do
@@ -36,6 +37,7 @@ modules = [
     "core.analysis.provider_selection",
     "core.analysis.provider_registry_bridge",
     "core.analysis.provider_baseline",
+    "core.analysis.provider_orchestrator",
 ]
 
 for module in modules:
@@ -87,6 +89,7 @@ echo "== Targeted provider tests =="
   tests/unit/test_provider_registry_metadata.py \
   tests/unit/test_provider_baseline.py \
   tests/unit/test_provider_baseline_import_safety.py \
+  tests/unit/test_provider_orchestrator.py \
   -q
 
 echo "== Full tests =="
