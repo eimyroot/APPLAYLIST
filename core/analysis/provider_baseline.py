@@ -10,36 +10,40 @@ from core.analysis.provider_contracts import (
     available,
 )
 from core.analysis.provider_errors import provider_runtime_error
-from services.analysis.analyzer import AudioAnalyzer
+
+
+BASELINE_PROVIDER_METADATA = ProviderMetadata(
+    name="baseline",
+    version="0.1.0",
+    backend="audio-analyzer",
+    capabilities=(
+        "bpm",
+        "key",
+        "camelot",
+        "energy",
+        "loudness",
+    ),
+    optional_dependencies=(),
+)
 
 
 class BaselineAnalysisProvider:
     """Stable baseline provider adapter.
 
-    This adapter wraps the existing AudioAnalyzer behind the provider contract.
-    It intentionally preserves current analyzer behavior while preparing the
-    project for provider-based orchestration.
+    Important:
+    AudioAnalyzer is imported lazily inside analyze(), not on module import.
+    This keeps provider metadata and registry boot paths safe.
     """
 
-    metadata = ProviderMetadata(
-        name="baseline",
-        version="0.1.0",
-        backend="audio-analyzer",
-        capabilities=(
-            "bpm",
-            "key",
-            "camelot",
-            "energy",
-            "loudness",
-        ),
-        optional_dependencies=(),
-    )
+    metadata = BASELINE_PROVIDER_METADATA
 
     def availability(self) -> ProviderAvailability:
         return available(self.metadata.name)
 
     def analyze(self, provider_input: ProviderInput) -> ProviderOutput:
         try:
+            from services.analysis.analyzer import AudioAnalyzer
+
             record = AudioAnalyzer().analyze_file(
                 track_id=provider_input.track_id,
                 path=str(provider_input.path),
@@ -78,3 +82,7 @@ class BaselineAnalysisProvider:
 
 def create_baseline_provider() -> BaselineAnalysisProvider:
     return BaselineAnalysisProvider()
+
+
+def get_baseline_provider_metadata() -> ProviderMetadata:
+    return BASELINE_PROVIDER_METADATA
