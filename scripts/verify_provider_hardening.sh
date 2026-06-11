@@ -15,6 +15,7 @@ for f in \
   core/analysis/provider_errors.py \
   core/analysis/provider_contracts.py \
   core/analysis/provider_selection.py \
+  core/analysis/provider_registry_bridge.py \
   docs/architecture/APPLAYLIST_PROVIDER_HARDENING.md \
   docs/ops/PROVIDER_HARDENING_RUNBOOK.md
 do
@@ -32,6 +33,7 @@ modules = [
     "core.analysis.provider_errors",
     "core.analysis.provider_contracts",
     "core.analysis.provider_selection",
+    "core.analysis.provider_registry_bridge",
 ]
 
 for module in modules:
@@ -55,6 +57,7 @@ echo "== Targeted provider tests =="
   tests/unit/test_provider_errors.py \
   tests/unit/test_provider_contracts.py \
   tests/unit/test_provider_selection.py \
+  tests/unit/test_provider_registry_bridge.py \
   -q
 
 echo "== Full tests =="
