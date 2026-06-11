@@ -20,10 +20,10 @@ do
 done
 
 echo "== Import safety check =="
-.venv/bin/python -c "import importlib; importlib.import_module('core.analysis.normalize'); importlib.import_module('core.analysis.provider_registry'); print('Provider registry core imports are safe.')"
+.venv/bin/python -c "import importlib; importlib.import_module("core.analysis.normalize"); importlib.import_module("core.analysis.provider_registry"); print("Provider registry core imports are safe.")"
 
 echo "== Optional dependency visibility check =="
-.venv/bin/python -c "import importlib.util; [print(name + ': ' + ('installed' if importlib.util.find_spec(name) else 'not installed')) for name in ['librosa','numba','llvmlite']]"
+.venv/bin/python -c "import importlib.util; names=["librosa","numba","llvmlite"]; [print(name + ": " + ("installed" if importlib.util.find_spec(name) else "not installed")) for name in names]"
 
 echo "== Tests =="
 .venv/bin/python -m pytest -q
