@@ -12,6 +12,9 @@ for f in \
   core/analysis/normalize.py \
   core/analysis/provider_registry.py \
   core/analysis/provider_essentia.py \
+  core/analysis/provider_errors.py \
+  core/analysis/provider_contracts.py \
+  core/analysis/provider_selection.py \
   docs/architecture/APPLAYLIST_PROVIDER_HARDENING.md \
   docs/ops/PROVIDER_HARDENING_RUNBOOK.md
 do
@@ -20,12 +23,41 @@ do
 done
 
 echo "== Import safety check =="
-.venv/bin/python -c "import importlib; importlib.import_module("core.analysis.normalize"); importlib.import_module("core.analysis.provider_registry"); print("Provider registry core imports are safe.")"
+.venv/bin/python - <<PY
+import importlib
+
+modules = [
+    "core.analysis.normalize",
+    "core.analysis.provider_registry",
+    "core.analysis.provider_errors",
+    "core.analysis.provider_contracts",
+    "core.analysis.provider_selection",
+]
+
+for module in modules:
+    importlib.import_module(module)
+    print(f"OK import: {module}")
+
+print("Provider core imports are safe.")
+PY
 
 echo "== Optional dependency visibility check =="
-.venv/bin/python -c "import importlib.util; names=["librosa","numba","llvmlite"]; [print(name + ": " + ("installed" if importlib.util.find_spec(name) else "not installed")) for name in names]"
+.venv/bin/python - <<PY
+import importlib.util
 
-echo "== Tests =="
+for name in ["librosa", "numba", "llvmlite", "essentia"]:
+    print(name + ": " + ("installed" if importlib.util.find_spec(name) else "not installed"))
+PY
+
+echo "== Targeted provider tests =="
+.venv/bin/python -m pytest \
+  tests/unit/test_provider_import_safety.py \
+  tests/unit/test_provider_errors.py \
+  tests/unit/test_provider_contracts.py \
+  tests/unit/test_provider_selection.py \
+  -q
+
+echo "== Full tests =="
 .venv/bin/python -m pytest -q
 
 echo "== PROVIDER HARDENING VERIFY PASSED =="
