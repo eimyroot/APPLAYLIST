@@ -108,3 +108,37 @@ api/main.py.bak.*
 api/main.py.bak.*
 
 api/main.py.bak.*
+
+# --- VOODOO LOCAL / RUNTIME / SENSITIVE ---
+.env
+.env.*
+!.env.example
+
+.venv/
+venv/
+ENV/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.DS_Store
+__MACOSX/
+
+*.db
+*.sqlite
+*.sqlite3
+
+*.egg-info/
+dist/
+build/
+
+.local_backups/
+artifacts/
+exports/
+logs/
+tmp/
