@@ -16,6 +16,7 @@ for f in \
   core/analysis/provider_contracts.py \
   core/analysis/provider_selection.py \
   core/analysis/provider_registry_bridge.py \
+  core/analysis/provider_baseline.py \
   docs/architecture/APPLAYLIST_PROVIDER_HARDENING.md \
   docs/ops/PROVIDER_HARDENING_RUNBOOK.md
 do
@@ -34,6 +35,7 @@ modules = [
     "core.analysis.provider_contracts",
     "core.analysis.provider_selection",
     "core.analysis.provider_registry_bridge",
+    "core.analysis.provider_baseline",
 ]
 
 for module in modules:
@@ -41,6 +43,29 @@ for module in modules:
     print(f"OK import: {module}")
 
 print("Provider core imports are safe.")
+PY
+
+echo "== Registry availability and metadata smoke check =="
+.venv/bin/python - <<PY
+from core.analysis import provider_registry
+
+availability = provider_registry.get_provider_availability(["baseline"])
+assert availability[0].provider == "baseline"
+assert availability[0].is_available is True
+
+metadata = provider_registry.get_provider_metadata(["baseline"])
+assert metadata[0].name == "baseline"
+assert metadata[0].optional_dependencies == ()
+
+selection = provider_registry.select_available_provider(
+    requested_provider=None,
+    configured_default=None,
+    safe_baseline="baseline",
+    provider_names=["baseline"],
+)
+assert selection.provider == "baseline"
+
+print("Registry availability and metadata smoke check passed.")
 PY
 
 echo "== Optional dependency visibility check =="
@@ -58,6 +83,10 @@ echo "== Targeted provider tests =="
   tests/unit/test_provider_contracts.py \
   tests/unit/test_provider_selection.py \
   tests/unit/test_provider_registry_bridge.py \
+  tests/unit/test_provider_registry_availability.py \
+  tests/unit/test_provider_registry_metadata.py \
+  tests/unit/test_provider_baseline.py \
+  tests/unit/test_provider_baseline_import_safety.py \
   -q
 
 echo "== Full tests =="
