@@ -142,3 +142,6 @@ artifacts/
 exports/
 logs/
 tmp/
+
+# --- APPLAYLIST ICLOUD DUPLICATE GUARD ---
+* 2.py
