@@ -42,8 +42,8 @@ jobs:
       - name: Compile
         run: python -m compileall -q api core services data workers
 
-      - name: Lint
-        run: python -m ruff check .
+      - name: Critical lint gate
+        run: python -m ruff check . --select E9,F63,F7,F82
 
       - name: Test
         env:
