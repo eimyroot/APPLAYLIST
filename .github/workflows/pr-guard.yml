@@ -2,23 +2,27 @@ name: PR Guard
 
 on:
   pull_request:
-    types: [opened, edited, synchronize]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
 
 jobs:
   validate-pr:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Validate branch name
-        run: |
-          bash scripts/check_branch_name.sh "${{ github.head_ref }}"
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: bash scripts/check_branch_name.sh "$HEAD_REF"
 
       - name: Validate PR structure
-        run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BODY="${{ github.event.pull_request.body }}"
-          export PR_TITLE PR_BODY
-          bash scripts/check_pr_standard.sh
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash scripts/check_pr_standard.sh
