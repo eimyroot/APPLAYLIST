@@ -48,4 +48,18 @@ jobs:
       - name: Test
         env:
           APPLAYLIST_ENV: test
-        run: python -m pytest -q
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          python -m pytest -q \
+            --junitxml="artifacts/junit-${{ matrix.python-version }}.xml" \
+            2>&1 | tee "artifacts/pytest-${{ matrix.python-version }}.log"
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-python-${{ matrix.python-version }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
