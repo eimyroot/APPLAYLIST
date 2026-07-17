@@ -3,23 +3,26 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from data.models.playlist_candidate import PlaylistCandidate
-from data.repositories.analysis_repository import AnalysisRepository
-from services.composition.adapter import (
-    CandidateIssue,
-    adapt_playlist_candidates,
-)
+from services.composition.adapter import CandidateIssue
 from services.composition.engine import DeterministicCompositionEngine
 from services.composition.models import (
     CompositionFailureReason,
     CompositionMode,
-    CompositionRequest,
     CompositionStatus,
+)
+from services.composition.runner import (
+    CanonicalCompositionExecutionRequest,
+    CanonicalCompositionExecutionResult,
+    CanonicalCompositionRunner,
+    PlaylistCandidateRepository,
 )
 
 
-class PlaylistCandidateRepository(Protocol):
-    def list_playlist_candidates(self) -> list[PlaylistCandidate]: ...
+class CanonicalCompositionExecutor(Protocol):
+    def run(
+        self,
+        request: CanonicalCompositionExecutionRequest,
+    ) -> CanonicalCompositionExecutionResult: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,36 +74,33 @@ class CompositionShadowService:
     def __init__(
         self,
         *,
+        runner: CanonicalCompositionExecutor | None = None,
         repository: PlaylistCandidateRepository | None = None,
         engine: DeterministicCompositionEngine | None = None,
     ) -> None:
-        self._repository = (
-            repository if repository is not None else AnalysisRepository()
-        )
-        self._engine = (
-            engine if engine is not None else DeterministicCompositionEngine()
+        if runner is not None and (repository is not None or engine is not None):
+            raise ValueError("runner cannot be combined with repository or engine")
+        self._runner = (
+            runner
+            if runner is not None
+            else CanonicalCompositionRunner(repository=repository, engine=engine)
         )
 
     def compare(self, request: ShadowComparisonRequest) -> CompositionShadowReport:
-        mode = _parse_mode(request.mode)
         legacy_ids = tuple(track_id.strip() for track_id in request.legacy_track_ids)
-        candidates = self._repository.list_playlist_candidates()
-        adaptation = adapt_playlist_candidates(
-            candidates,
-            duration_fallback_seconds=request.duration_fallback_seconds,
-        )
-        canonical = self._engine.compose(
-            CompositionRequest(
-                tracks=adaptation.tracks,
+        execution = self._runner.run(
+            CanonicalCompositionExecutionRequest(
                 target_track_count=request.target_track_count,
                 bpm_min=request.bpm_min,
                 bpm_max=request.bpm_max,
-                mode=mode,
+                mode=request.mode,
                 genre=request.genre,
                 start_key=request.start_key,
+                duration_fallback_seconds=request.duration_fallback_seconds,
             )
         )
-        canonical_ids = tuple(track.track_id for track in canonical.tracks)
+        canonical = execution.composition
+        canonical_ids = tuple(track.track_id for track in execution.tracks)
         legacy_set = set(legacy_ids)
         canonical_set = set(canonical_ids)
         overlap_count = len(legacy_set & canonical_set)
@@ -114,30 +114,17 @@ class CompositionShadowService:
             canonical_track_ids=canonical_ids,
             canonical_status=canonical.status,
             canonical_failure_reason=canonical.failure_reason,
-            candidate_count=len(candidates),
-            adapted_count=len(adaptation.tracks),
-            rejected_count=adaptation.rejected_count,
-            fallback_count=adaptation.fallback_count,
+            candidate_count=execution.candidate_count,
+            adapted_count=execution.adapted_count,
+            rejected_count=execution.rejected_count,
+            fallback_count=execution.fallback_count,
             overlap_count=overlap_count,
             position_match_count=position_match_count,
             legacy_coverage_ratio=_ratio(overlap_count, len(legacy_set)),
             canonical_coverage_ratio=_ratio(overlap_count, len(canonical_set)),
-            adaptation_issues=adaptation.issues,
+            adaptation_issues=execution.adaptation_issues,
             canonical_warnings=canonical.warnings,
         )
-
-
-def _parse_mode(value: CompositionMode | str) -> CompositionMode:
-    if isinstance(value, CompositionMode):
-        return value
-    normalized = value.strip().casefold()
-    try:
-        return CompositionMode(normalized)
-    except ValueError as exc:
-        allowed = ", ".join(mode.value for mode in CompositionMode)
-        raise ValueError(
-            f"Unsupported composition mode: {value!r}; allowed: {allowed}"
-        ) from exc
 
 
 def _ratio(numerator: int, denominator: int) -> float:
