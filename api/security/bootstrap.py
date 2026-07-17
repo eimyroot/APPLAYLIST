@@ -31,4 +31,6 @@ def apply_security_hardening(
         app.add_middleware(
             RateLimitMiddleware,
             limit_per_minute=config.rate_limit_per_minute,
+            trusted_proxy_depth=config.trusted_proxy_depth,
+            trusted_proxy_networks=config.trusted_proxy_networks,
         )
