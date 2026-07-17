@@ -66,7 +66,7 @@ class PipelineCompositionComparisonHook:
         self._sink = sink if sink is not None else LoggingCompositionReceiptSink()
         self._clock = clock if clock is not None else lambda: datetime.now(timezone.utc)
 
-    def observe(
+    def observe_run(
         self,
         *,
         run_id: str,
