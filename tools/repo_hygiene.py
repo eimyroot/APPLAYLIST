@@ -13,9 +13,9 @@ from tools.repo_hygiene_core import (
     report_markdown,
     resolve_repo_root,
     restore_manifest,
-    run_verification,
     write_report,
 )
+from tools.repo_hygiene_verify import run_verification
 
 
 def _add_scope_flags(parser: argparse.ArgumentParser) -> None:
@@ -74,12 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify = subparsers.add_parser(
         "verify",
-        help="run Git, compile and import safety checks",
+        help="run Git, syntax and import safety checks without writing bytecode",
     )
     verify.add_argument(
         "--python",
         default=sys.executable,
-        help="Python executable used for compile/import checks",
+        help="Python executable used for syntax/import checks",
     )
 
     return parser
@@ -95,14 +95,14 @@ def main(argv: list[str] | None = None) -> int:
         if command == "audit":
             report = audit_repository(
                 root,
-                include_generated=getattr(args, "include_generated", False),
-                include_heavy=getattr(args, "include_heavy", False),
+                include_generated=args.include_generated,
+                include_heavy=args.include_heavy,
             )
             json_path, markdown_path = write_report(root, report, label="audit")
             print(f"JSON_REPORT={json_path}")
             print(f"MARKDOWN_REPORT={markdown_path}")
             print(json.dumps(report.summary(), sort_keys=True))
-            if getattr(args, "stdout", False):
+            if args.stdout:
                 print()
                 print(report_markdown(report))
             return 0
