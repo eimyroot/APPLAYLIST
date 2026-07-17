@@ -5,7 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from api.middleware.request_context import ensure_request_id
-from api.security.settings import settings
+from api.security.settings import SecuritySettings, settings
 
 
 WRITE_PREFIXES = (
@@ -16,10 +16,19 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
+    def __init__(
+        self,
+        app,
+        security_settings: SecuritySettings | None = None,
+    ) -> None:
+        super().__init__(app)
+        self.settings = security_settings or settings
+
     async def dispatch(self, request: Request, call_next):
         request_id = ensure_request_id(request)
+        config = self.settings
 
-        if not settings.auth_enabled:
+        if not config.auth_enabled:
             return await call_next(request)
 
         if request.method in SAFE_METHODS:
@@ -29,8 +38,8 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         if not any(path.startswith(prefix) for prefix in WRITE_PREFIXES):
             return await call_next(request)
 
-        supplied = request.headers.get(settings.api_key_header_name)
-        expected = settings.api_key
+        supplied = request.headers.get(config.api_key_header_name)
+        expected = config.api_key
 
         if not expected:
             return JSONResponse(
