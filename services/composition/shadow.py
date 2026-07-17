@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -75,17 +74,21 @@ class CompositionShadowService:
         repository: PlaylistCandidateRepository | None = None,
         engine: DeterministicCompositionEngine | None = None,
     ) -> None:
-        self._repository = repository or AnalysisRepository()
-        self._engine = engine or DeterministicCompositionEngine()
+        self._repository = (
+            repository if repository is not None else AnalysisRepository()
+        )
+        self._engine = (
+            engine if engine is not None else DeterministicCompositionEngine()
+        )
 
     def compare(self, request: ShadowComparisonRequest) -> CompositionShadowReport:
+        mode = _parse_mode(request.mode)
         legacy_ids = tuple(track_id.strip() for track_id in request.legacy_track_ids)
         candidates = self._repository.list_playlist_candidates()
         adaptation = adapt_playlist_candidates(
             candidates,
             duration_fallback_seconds=request.duration_fallback_seconds,
         )
-        mode = _parse_mode(request.mode)
         canonical = self._engine.compose(
             CompositionRequest(
                 tracks=adaptation.tracks,
@@ -132,7 +135,9 @@ def _parse_mode(value: CompositionMode | str) -> CompositionMode:
         return CompositionMode(normalized)
     except ValueError as exc:
         allowed = ", ".join(mode.value for mode in CompositionMode)
-        raise ValueError(f"Unsupported composition mode: {value!r}; allowed: {allowed}") from exc
+        raise ValueError(
+            f"Unsupported composition mode: {value!r}; allowed: {allowed}"
+        ) from exc
 
 
 def _ratio(numerator: int, denominator: int) -> float:
