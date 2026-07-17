@@ -4,14 +4,14 @@
 
 This guide verifies Bundle 48B only: the minimal React/Tauri host boundary and opaque library-root capability.
 
-It does not start the Python sidecar, scan a library, analyze music or create a production installer.
+It does not start the Python sidecar, scan a library, analyze music or create a signed production installer.
 
 ## Repository Layout
 
 ```text
 frontend/desktop/
 ├── package.json
-├── package-lock.json              # required before final merge
+├── package-lock.json
 ├── index.html
 ├── tsconfig.json
 ├── vite.config.ts
@@ -24,41 +24,19 @@ frontend/desktop/
 
 desktop/tauri/
 ├── Cargo.toml
-├── Cargo.lock                     # required before final merge
+├── Cargo.lock
 ├── build.rs
 ├── tauri.conf.json
+├── icons/icon.png
 ├── capabilities/main.json
 └── src/
     ├── lib.rs
     └── main.rs
 ```
 
-## Bootstrap Lockfile Stage
+## Final Locked Verification
 
-The first CI pass is allowed to generate lockfiles because the toolchains are new to the repository.
-
-Locally:
-
-```bash
-cd frontend/desktop
-npm install --ignore-scripts
-npm run check
-npm run security:contract
-npm run build
-
-cd ../../desktop/tauri
-cargo generate-lockfile
-cargo fmt -- --check
-cargo clippy --all-targets --locked -- -D warnings
-cargo test --locked
-cargo build --release --locked
-```
-
-Do not merge the bootstrap state. Download the CI-produced lockfiles, compare Linux/macOS outputs and commit the accepted exact files.
-
-## Final Locked Stage
-
-After lockfiles are committed:
+The committed dependency graph is authoritative. Do not regenerate lockfiles during verification.
 
 ```bash
 cd frontend/desktop
@@ -74,15 +52,25 @@ cargo test --locked
 cargo build --release --locked
 ```
 
-No final workflow may run `npm install` or `cargo generate-lockfile`.
+The final workflow must not run:
+
+```text
+npm install
+cargo generate-lockfile
+cargo fmt without --check
+git commit
+git push
+```
 
 ## macOS App Proof
 
-From `frontend/desktop` after `npm ci` and `npm run build`:
+After the frontend build, run the Tauri CLI from the actual Tauri project root:
 
 ```bash
-npm run tauri -- build \
-  --config ../../desktop/tauri/tauri.conf.json \
+cd desktop/tauri
+../../frontend/desktop/node_modules/.bin/tauri \
+  build \
+  --config tauri.conf.json \
   --bundles app
 ```
 
@@ -101,28 +89,41 @@ cd frontend/desktop
 npm run security:contract
 ```
 
-The check fails when renderer TypeScript contains:
+The v2 security contract fails when renderer TypeScript contains:
 
 - direct `fetch`, XMLHttpRequest, WebSocket or EventSource access,
 - loopback addresses,
 - Tauri shell, filesystem, HTTP or dialog plugin imports,
 - Node filesystem or child-process imports,
-- any invoke command outside the explicit allow-list.
+- Tauri imports outside `src/desktopBridge.ts`,
+- invoke calls outside `src/desktopBridge.ts`,
+- dynamic or non-literal invoke command names,
+- invoke commands outside the explicit allow-list.
+
+The only allowed renderer commands are:
+
+```text
+desktop_status
+choose_library_root
+```
 
 ## Manual Proof
 
-Run the Vite/Tauri development shell only in a trusted development checkout:
+Run the development shell only in a trusted checkout.
+
+First start Vite:
 
 ```bash
 cd frontend/desktop
+npm ci --ignore-scripts
 npm run dev
 ```
 
-In another terminal:
+In another terminal start Tauri from its project root:
 
 ```bash
-cd frontend/desktop
-npm run tauri -- dev --config ../../desktop/tauri/tauri.conf.json
+cd desktop/tauri
+../../frontend/desktop/node_modules/.bin/tauri dev --config tauri.conf.json
 ```
 
 Expected behavior:
@@ -136,11 +137,18 @@ Expected behavior:
 ## Security Notes
 
 - Never replace the native dialog with a renderer text field for host paths.
-- Never add `@tauri-apps/plugin-fs`, `plugin-shell` or `plugin-http` to the renderer.
-- Never expose the capability registry lookup method as a generic renderer command.
+- Never add renderer access to `plugin-fs`, `plugin-shell`, `plugin-http` or `plugin-dialog`.
+- Never import Tauri APIs outside `desktopBridge.ts`.
+- Never construct invoke command names dynamically.
+- Never expose capability registry lookup as a generic renderer command.
 - Never log the internal canonical path merely to debug the UI.
 - Capability persistence is not part of this proof; registry state is session-only.
+- Bundle 48C must keep sidecar credentials, URL and lifecycle ownership in Rust.
+
+## CI Interpretation
+
+A workflow result with no assigned steps is not evidence that a build command failed. Required checks remain fail-closed and must be rerun after GitHub-hosted runner access is restored.
 
 ## Rollback
 
-Revert the isolated Bundle 48B squash commit. Remove generated `node_modules`, `dist` and Rust `target` directories locally; none belong in Git.
+Revert the isolated Bundle 48B squash commit. Remove local `node_modules`, `dist` and Rust `target` directories; none belongs in Git.
