@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Protocol
-from uuid import uuid4
 
 from core.config.settings import get_settings
 from services.composer.composer import Composer
@@ -16,40 +14,51 @@ from services.composition.receipt_sink import (
     JsonCompositionReceiptSink,
 )
 from services.export.exporter import Exporter
+from services.orchestrator.composition_authority import (
+    LegacyCompositionAuthority,
+    PipelineCompositionAuthority,
+    PipelineCompositionCommand,
+    new_pipeline_run_id,
+)
 
 
 logger = logging.getLogger(__name__)
 
 
-class PipelineComparisonObserver(Protocol):
-    def observe(
-        self,
-        *,
-        legacy_track_ids: tuple[str, ...],
-        target_track_count: int,
-        bpm_min: float | None,
-        bpm_max: float | None,
-        mode: str | None,
-    ) -> object: ...
-
-
-def _new_pipeline_run_id() -> str:
-    return f"pipeline-{uuid4().hex}"
+_new_pipeline_run_id = new_pipeline_run_id
 
 
 class OrchestratorPipeline:
     def __init__(
         self,
         *,
+        composition_authority: PipelineCompositionAuthority | None = None,
         composer: Composer | None = None,
         exporter: Exporter | None = None,
         run_id_factory: Callable[[], str] | None = None,
         comparison_hook: object | None = None,
         comparison_enabled: bool | None = None,
     ) -> None:
-        self.composer = composer if composer is not None else Composer()
-        self.exporter = exporter if exporter is not None else Exporter()
-        self._run_id_factory = run_id_factory or _new_pipeline_run_id
+        if composition_authority is not None and any(
+            value is not None for value in (composer, exporter, run_id_factory)
+        ):
+            raise ValueError(
+                "composition_authority cannot be combined with legacy dependencies"
+            )
+
+        if composition_authority is None:
+            legacy_authority = LegacyCompositionAuthority(
+                composer=composer,
+                exporter=exporter,
+                run_id_factory=run_id_factory,
+            )
+            self._composition_authority = legacy_authority
+            self.composer = legacy_authority.composer
+            self.exporter = legacy_authority.exporter
+        else:
+            self._composition_authority = composition_authority
+            self.composer = None
+            self.exporter = None
 
         settings = None
         if comparison_enabled is None or (
@@ -84,20 +93,20 @@ class OrchestratorPipeline:
         bpm_max: float | None = None,
         mode: str | None = None,
     ) -> dict:
-        playlist = self.composer.compose(limit=limit)
-        playlist_id = self._run_id_factory()
-
-        if not isinstance(playlist_id, str) or not playlist_id.strip():
-            raise RuntimeError("Pipeline run ID factory returned an invalid identifier")
-        normalized_playlist_id = playlist_id.strip()
-
-        export = self.exporter.export_m3u(
-            playlist_id=normalized_playlist_id,
-            tracks=playlist,
+        outcome = self._composition_authority.execute(
+            PipelineCompositionCommand(
+                path=path,
+                limit=limit,
+                bpm_min=bpm_min,
+                bpm_max=bpm_max,
+                mode=mode,
+            )
         )
+        playlist = list(outcome.tracks)
+        export = dict(outcome.export)
 
         self._observe_composition(
-            run_id=normalized_playlist_id,
+            run_id=outcome.run_id,
             playlist=playlist,
             limit=limit,
             bpm_min=bpm_min,
