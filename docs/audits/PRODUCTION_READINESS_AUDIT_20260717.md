@@ -17,7 +17,7 @@ Google Drive copies are historical snapshots or donor material. At least one Dri
 ## Verified Baseline
 
 - Branch: `feature/bundle-24-production-baseline`
-- Verified head: `b7329d66c7d09ddb1af368cd6ec1d2c00de7a4ab`
+- Verification lineage: commits through the Bundle 24 final CI gate
 - Supported Python: `>=3.11,<3.13`
 - Python 3.11: 52 passed, 0 failed, 0 errors
 - Python 3.12: 52 passed, 0 failed, 0 errors
