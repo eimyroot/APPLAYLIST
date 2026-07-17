@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from core.analysis.provider_contract import (
+    ProviderContractError,
     ProviderDependencyMissingError,
+    ProviderRuntimeFailure,
     ProviderUnavailableError,
     UnknownProviderError,
 )
@@ -49,11 +51,17 @@ class LibrosaAnalyzerProvider(BaseAnalyzerProvider):
         return AnalyzerProviderInfo(name=cls.name, available=True, reason="ok")
 
     def analyze(self, path: str) -> Dict[str, Any]:
-        return {
-            "provider": self.name,
-            "path": path,
-            "status": "stub",
-        }
+        try:
+            from services.analysis.librosa_baseline import BaselineLibrosaMIR
+
+            return BaselineLibrosaMIR().analyze(path)
+        except ProviderContractError:
+            raise
+        except Exception as exc:
+            raise ProviderRuntimeFailure(
+                "Librosa baseline analysis failed",
+                provider=self.name,
+            ) from exc
 
 
 class EssentiaAnalyzerProvider(BaseAnalyzerProvider):
