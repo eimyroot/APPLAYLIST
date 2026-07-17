@@ -8,10 +8,26 @@ from core.config.settings import get_settings
 
 
 class Exporter:
-    def __init__(self) -> None:
-        settings = get_settings()
-        self.exports_dir = Path(settings.exports_dir)
-        self.artifacts_dir = Path(settings.artifacts_dir)
+    def __init__(
+        self,
+        *,
+        exports_dir: str | Path | None = None,
+        artifacts_dir: str | Path | None = None,
+    ) -> None:
+        settings = get_settings() if exports_dir is None or artifacts_dir is None else None
+
+        resolved_exports_dir = exports_dir
+        if resolved_exports_dir is None:
+            assert settings is not None
+            resolved_exports_dir = settings.exports_dir
+
+        resolved_artifacts_dir = artifacts_dir
+        if resolved_artifacts_dir is None:
+            assert settings is not None
+            resolved_artifacts_dir = settings.artifacts_dir
+
+        self.exports_dir = Path(resolved_exports_dir)
+        self.artifacts_dir = Path(resolved_artifacts_dir)
         self.exports_dir.mkdir(parents=True, exist_ok=True)
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -29,9 +45,9 @@ class Exporter:
 
         with m3u_path.open("w", encoding="utf-8") as f:
             f.write("#EXTM3U\n")
-            for t in tracks:
-                path = getattr(t, "path", None)
-                title = getattr(t, "track_id", "unknown")
+            for track in tracks:
+                path = getattr(track, "path", None)
+                title = getattr(track, "track_id", "unknown")
 
                 if path:
                     f.write(f"#EXTINF:-1,{title}\n")
