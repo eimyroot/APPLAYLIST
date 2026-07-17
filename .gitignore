@@ -42,6 +42,9 @@ data/config/path_profiles.json
 *.log
 *.tmp
 
+# Repository hygiene local state
+.repo-hygiene/
+
 # Backups and editor temporary files
 .backup_*
 .backup_*/
