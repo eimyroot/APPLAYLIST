@@ -4,6 +4,10 @@ import os
 from dataclasses import dataclass, field
 
 
+class SecurityConfigurationError(RuntimeError):
+    """Raised when security settings cannot be applied safely."""
+
+
 def _as_bool(value: str | None, default: bool) -> bool:
     if value is None:
         return default
@@ -15,6 +19,20 @@ def _as_int(value: str | None, default: int) -> int:
         return int(value) if value is not None else default
     except (TypeError, ValueError):
         return default
+
+
+def _parse_origins(raw: str) -> list[str]:
+    origins: list[str] = []
+    seen: set[str] = set()
+
+    for item in raw.split(","):
+        origin = item.strip()
+        if not origin or origin in seen:
+            continue
+        seen.add(origin)
+        origins.append(origin)
+
+    return origins
 
 
 @dataclass(frozen=True)
@@ -55,10 +73,26 @@ class SecuritySettings:
 
     @property
     def allowed_origins(self) -> list[str]:
-        raw = self.allowed_origins_raw.strip()
-        if not raw:
+        origins = _parse_origins(self.allowed_origins_raw)
+
+        if "*" in origins and len(origins) > 1:
+            raise SecurityConfigurationError(
+                "ALLOW_ORIGINS cannot combine '*' with explicit origins"
+            )
+
+        if self.is_production and (not origins or "*" in origins):
+            raise SecurityConfigurationError(
+                "Production requires an explicit non-wildcard ALLOW_ORIGINS allowlist"
+            )
+
+        if not origins:
             return ["*"]
-        return [item.strip() for item in raw.split(",") if item.strip()]
+
+        return origins
+
+    @property
+    def cors_allow_credentials(self) -> bool:
+        return "*" not in self.allowed_origins
 
     @property
     def auth_enabled(self) -> bool:

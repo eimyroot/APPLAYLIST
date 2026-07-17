@@ -14,6 +14,10 @@ def _set_auth_env(enabled: bool, api_key: str, *, app_env: str = "development") 
     os.environ["APP_ENV"] = app_env
     os.environ["AUTH_ENABLED"] = "true" if enabled else "false"
     os.environ["API_KEY"] = api_key
+    if app_env.lower() in {"prod", "production"}:
+        os.environ["ALLOW_ORIGINS"] = "https://app.example.test"
+    else:
+        os.environ.pop("ALLOW_ORIGINS", None)
 
 
 def _clear_auth_env() -> None:
@@ -21,6 +25,7 @@ def _clear_auth_env() -> None:
     os.environ.pop("API_KEY", None)
     os.environ.pop("API_KEY_HEADER_NAME", None)
     os.environ.pop("APP_ENV", None)
+    os.environ.pop("ALLOW_ORIGINS", None)
 
 
 def test_write_endpoint_rejects_missing_api_key_when_auth_enabled() -> None:

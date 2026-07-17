@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from fastapi.middleware.cors import CORSMiddleware
-
+from api.middleware.cors import install_cors
 from api.middleware.rate_limit import RateLimitMiddleware
 from api.middleware.request_size_guard import RequestSizeGuardMiddleware
 from api.middleware.security_headers import SecurityHeadersMiddleware
@@ -17,13 +16,7 @@ def apply_security_hardening(
     names = {mw.cls.__name__ for mw in existing if getattr(mw, "cls", None)}
 
     if "CORSMiddleware" not in names:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=config.allowed_origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        install_cors(app, config)
 
     if config.enable_security_headers and "SecurityHeadersMiddleware" not in names:
         app.add_middleware(SecurityHeadersMiddleware)
