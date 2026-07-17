@@ -1,17 +1,8 @@
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI
+"""Deprecated duplicate retained only because remote deletion was blocked.
 
-from core.config.settings import get_settings
+The canonical implementation lives in :mod:`api.middleware.cors`.
+"""
 
+from api.middleware.cors import install_cors
 
-def install_cors(app: FastAPI) -> None:
-    settings = get_settings()
-    origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["*"],
-    )
+__all__ = ["install_cors"]
