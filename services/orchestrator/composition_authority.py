@@ -29,6 +29,8 @@ class PipelineCompositionOutcome:
 
 
 class PipelineCompositionAuthority(Protocol):
+    authority_name: str
+
     def execute(
         self,
         command: PipelineCompositionCommand,
@@ -53,6 +55,8 @@ def new_pipeline_run_id() -> str:
 
 class LegacyCompositionAuthority:
     """Preserve the existing composer, run-ID and exporter behavior."""
+
+    authority_name = "legacy"
 
     def __init__(
         self,
@@ -87,6 +91,8 @@ class LegacyCompositionAuthority:
 
 class CanonicalCompositionAuthority:
     """Explicit canonical authority backed by the isolated export service."""
+
+    authority_name = "canonical"
 
     def __init__(
         self,
