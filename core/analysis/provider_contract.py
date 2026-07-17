@@ -23,6 +23,10 @@ class ProviderUnavailableError(ProviderContractError, RuntimeError):
     code = "provider_unavailable"
 
 
+class ProviderDependencyMissingError(ProviderUnavailableError):
+    code = "provider_dependency_missing"
+
+
 class ProviderRuntimeFailure(ProviderContractError, RuntimeError):
     code = "provider_runtime_error"
 
@@ -48,6 +52,13 @@ class CanonicalAnalysisResult:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def _first_not_none(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
 
 
 def _as_mapping(value: Any, field: str, provider: str | None) -> Mapping[str, Any]:
@@ -131,7 +142,7 @@ def normalize_provider_result(
     if not isinstance(path, str) or not path.strip():
         raise ProviderOutputInvalid("Analysis path must be a non-empty string")
 
-    raw_provider = raw_result.get("provider", expected_provider)
+    raw_provider = _first_not_none(raw_result.get("provider"), expected_provider)
     if not isinstance(raw_provider, str) or not raw_provider.strip():
         raise ProviderOutputInvalid("Provider result must identify its provider")
     provider = raw_provider.strip().lower()
@@ -162,29 +173,38 @@ def normalize_provider_result(
     raw_key = raw_result.get("key")
     key_block = _as_mapping(raw_key, "key", provider) if not isinstance(raw_key, str) else {}
 
-    bpm_raw = raw_result.get("bpm", beat.get("bpm"))
-    bpm_confidence_raw = raw_result.get(
-        "bpm_confidence",
+    bpm_raw = _first_not_none(raw_result.get("bpm"), beat.get("bpm"))
+    bpm_confidence_raw = _first_not_none(
+        raw_result.get("bpm_confidence"),
         beat.get("confidence"),
     )
 
     if isinstance(raw_key, Mapping):
-        key_raw = raw_key.get("camelot") or raw_key.get("key")
+        key_raw = _first_not_none(raw_key.get("camelot"), raw_key.get("key"))
     else:
         key_raw = raw_key
-    key_confidence_raw = raw_result.get(
-        "key_confidence",
+    key_confidence_raw = _first_not_none(
+        raw_result.get("key_confidence"),
         key_block.get("confidence"),
     )
 
-    energy_raw = raw_result.get("energy", metrics.get("energy_score"))
-    loudness_raw = raw_result.get("loudness_db", metrics.get("loudness_db"))
-    duration_raw = raw_result.get("duration_seconds")
-    if duration_raw is None:
-        duration_raw = raw_result.get("duration_sec", metrics.get("duration_seconds"))
-    genre_raw = raw_result.get(
-        "genre_hint",
-        tags.get("primary_genre_hint", raw_result.get("genre")),
+    energy_raw = _first_not_none(
+        raw_result.get("energy"),
+        metrics.get("energy_score"),
+    )
+    loudness_raw = _first_not_none(
+        raw_result.get("loudness_db"),
+        metrics.get("loudness_db"),
+    )
+    duration_raw = _first_not_none(
+        raw_result.get("duration_seconds"),
+        raw_result.get("duration_sec"),
+        metrics.get("duration_seconds"),
+    )
+    genre_raw = _first_not_none(
+        raw_result.get("genre_hint"),
+        tags.get("primary_genre_hint"),
+        raw_result.get("genre"),
     )
 
     bpm = _bounded(
