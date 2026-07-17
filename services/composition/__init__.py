@@ -34,6 +34,12 @@ from services.composition.receipt_sink import (
     CompositeCompositionReceiptSink,
     JsonCompositionReceiptSink,
 )
+from services.composition.runner import (
+    CanonicalCompositionExecutionRequest,
+    CanonicalCompositionExecutionResult,
+    CanonicalCompositionRunner,
+    parse_composition_mode,
+)
 from services.composition.shadow import (
     CompositionShadowReport,
     CompositionShadowService,
@@ -45,6 +51,9 @@ __all__ = [
     "CandidateIssue",
     "CandidateIssueCode",
     "CandidateIssueSeverity",
+    "CanonicalCompositionExecutionRequest",
+    "CanonicalCompositionExecutionResult",
+    "CanonicalCompositionRunner",
     "CompositeCompositionReceiptSink",
     "CompositionComparisonReceipt",
     "CompositionConstraints",
@@ -70,4 +79,5 @@ __all__ = [
     "TransitionScore",
     "adapt_playlist_candidates",
     "build_composition_comparison_receipt",
+    "parse_composition_mode",
 ]
