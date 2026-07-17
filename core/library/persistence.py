@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.library.track_metadata import MetadataOrigin
+from core.library.track_metadata import MetadataOrigin, TrackImportBatchResult
 
 
 def _sort_key(value: str) -> tuple[str, str]:
@@ -26,7 +26,10 @@ class PersistedTrack:
             raise ValueError("persisted track path must be absolute")
         if not isinstance(self.metadata_provider, str) or not self.metadata_provider.strip():
             raise ValueError("persisted metadata provider is required")
-        if not isinstance(self.metadata_provider_version, str) or not self.metadata_provider_version.strip():
+        if (
+            not isinstance(self.metadata_provider_version, str)
+            or not self.metadata_provider_version.strip()
+        ):
             raise ValueError("persisted metadata provider version is required")
         if not isinstance(self.metadata_origin, MetadataOrigin):
             try:
@@ -70,7 +73,10 @@ class TrackPersistenceBatchResult:
     requested_count: int
 
     def __post_init__(self) -> None:
-        if not isinstance(self.requested_count, int) or isinstance(self.requested_count, bool):
+        if not isinstance(self.requested_count, int) or isinstance(
+            self.requested_count,
+            bool,
+        ):
             raise TypeError("requested_count must be an integer")
         if self.requested_count < 0:
             raise ValueError("requested_count must be non-negative")
@@ -106,3 +112,21 @@ class TrackPersistenceBatchResult:
     @property
     def complete(self) -> bool:
         return not self.issues
+
+
+@dataclass(frozen=True, slots=True)
+class LibraryTrackIngestionResult:
+    import_result: TrackImportBatchResult
+    persistence_result: TrackPersistenceBatchResult
+
+    def __post_init__(self) -> None:
+        if self.persistence_result.requested_count != len(self.import_result.candidates):
+            raise ValueError("persistence result must account for all import candidates")
+
+    @property
+    def complete(self) -> bool:
+        return (
+            self.import_result.source_scan_complete
+            and not self.import_result.issues
+            and self.persistence_result.complete
+        )
