@@ -1,18 +1,9 @@
 import os
-from importlib import reload
 
 from fastapi.testclient import TestClient
 
-import api.main as main_module
-import api.security.auth_gate as auth_gate_module
-import api.security.settings as settings_module
-
-
-def _reload_app():
-    reload(settings_module)
-    reload(auth_gate_module)
-    reload(main_module)
-    return main_module.app
+from api.main import create_app
+from api.security.settings import SecuritySettings
 
 
 def _clear_auth_env() -> None:
@@ -27,7 +18,7 @@ def test_auth_failure_includes_request_id_in_body_and_header() -> None:
         os.environ["AUTH_ENABLED"] = "true"
         os.environ["API_KEY"] = "bundle14-secret"
 
-        app = _reload_app()
+        app = create_app(SecuritySettings())
         client = TestClient(app)
 
         response = client.post("/pipeline/run", json={"path": "/tmp", "limit": 1})
@@ -42,4 +33,3 @@ def test_auth_failure_includes_request_id_in_body_and_header() -> None:
         assert rid_body == rid_header
     finally:
         _clear_auth_env()
-        _reload_app()
