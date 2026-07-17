@@ -1,4 +1,4 @@
-# Python
+# Python bytecode and test caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -7,104 +7,50 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Environments
+# Virtual environments and local configuration
 .env
 .env.*
 !.env.example
 .venv/
 venv/
 
-# Build
+# Build outputs
 build/
 dist/
 *.egg-info/
 
-# IDE / OS
+# IDE, macOS and cloud-sync artifacts
 .DS_Store
 .vscode/
 .idea/
+*.icloud
+* 2.*
+* 3.*
+* 4.*
 
-# Local runtime / data
+# Runtime data and generated artifacts
 tmp/
 logs/
 artifacts/
 exports/
+data/cache/
+data/tmp/
+data/config/path_profiles.json
 *.db
 *.sqlite
 *.sqlite3
-
-# Frontend
-frontend/node_modules/
-frontend/dist/
-
-# STOP DUPLICATES + ICLOUD
-*.icloud
-* 2.*
-* 3.*
-* 4.*
-
-# macOS / iCloud junk
-*.icloud
-* 2.*
-* 3.*
-* 4.*
-
-# macOS / iCloud garbage
-*.icloud
-.DS_Store
-
-# runtime
-data/cache/
-data/config/path_profiles.json
-
-# backups
-.backup_*
-
-# --- VOODOO CLEAN RULES ---
-*.icloud
-.DS_Store
 *.log
 *.tmp
-*.bak
-__pycache__/
-*.pyc
+
+# Backups and editor temporary files
 .backup_*
-data/cache/
-data/tmp/
-node_modules/
-.env
-# --- APPLAYLIST HARDENING ---
-*.icloud
-.DS_Store
-*.log
-*.tmp
+.backup_*/
 *.bak
 *.swp
 *.swo
-__pycache__/
-*.pyc
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.backup_*/
-data/tmp/
-.env
-.env.*
-
 api/main.py.bak.*
 
-api/main.py.bak.*
-
-api/main.py.bak.*
-
-api/main.py.bak.*
-
-api/main.py.bak.*
-
-api/main.py.bak.*
-
-api/main.py.bak.*
-
-api/main.py.bak.*
-
-api/main.py.bak.*
+# Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/

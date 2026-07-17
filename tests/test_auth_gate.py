@@ -1,18 +1,13 @@
 import os
-from importlib import reload
 
 from fastapi.testclient import TestClient
 
-import api.main as main_module
-import api.security.auth_gate as auth_gate_module
-import api.security.settings as settings_module
+from api.main import create_app
+from api.security.settings import SecuritySettings
 
 
-def _reload_app():
-    reload(settings_module)
-    reload(auth_gate_module)
-    reload(main_module)
-    return main_module.app
+def _build_app():
+    return create_app(SecuritySettings())
 
 
 def _set_auth_env(enabled: bool, api_key: str) -> None:
@@ -30,8 +25,7 @@ def _clear_auth_env() -> None:
 def test_write_endpoint_rejects_missing_api_key_when_auth_enabled() -> None:
     try:
         _set_auth_env(True, "secret-test-key")
-        app = _reload_app()
-        client = TestClient(app)
+        client = TestClient(_build_app())
 
         response = client.post("/pipeline/run", json={"path": "/tmp", "limit": 1})
         assert response.status_code == 401
@@ -39,14 +33,12 @@ def test_write_endpoint_rejects_missing_api_key_when_auth_enabled() -> None:
         assert body["error"]["type"] == "unauthorized"
     finally:
         _clear_auth_env()
-        _reload_app()
 
 
 def test_write_endpoint_accepts_valid_api_key_when_auth_enabled() -> None:
     try:
         _set_auth_env(True, "secret-test-key")
-        app = _reload_app()
-        client = TestClient(app)
+        client = TestClient(_build_app())
 
         response = client.post(
             "/pipeline/run",
@@ -56,17 +48,14 @@ def test_write_endpoint_accepts_valid_api_key_when_auth_enabled() -> None:
         assert response.status_code == 200
     finally:
         _clear_auth_env()
-        _reload_app()
 
 
 def test_get_endpoint_does_not_require_api_key() -> None:
     try:
         _set_auth_env(True, "secret-test-key")
-        app = _reload_app()
-        client = TestClient(app)
+        client = TestClient(_build_app())
 
         response = client.get("/health")
         assert response.status_code == 200
     finally:
         _clear_auth_env()
-        _reload_app()

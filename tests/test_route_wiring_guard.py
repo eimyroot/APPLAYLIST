@@ -1,8 +1,10 @@
-from api.main import app
+from api.main import create_app
 
 
 def test_required_routes_present() -> None:
-    paths = {getattr(route, "path", None) for route in app.routes}
+    """Validate public route wiring without depending on FastAPI internals."""
+    app = create_app()
+    paths = set(app.openapi().get("paths", {}))
     required = {
         "/health",
         "/jobs/{job_type}",
