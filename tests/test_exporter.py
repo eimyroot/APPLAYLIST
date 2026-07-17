@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from services.export.exporter import Exporter
 
 
-def test_exporter_writes_files(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("EXPORTS_DIR", str(tmp_path / "exports"))
-    monkeypatch.setenv("ARTIFACTS_DIR", str(tmp_path / "artifacts"))
-
-    exporter = Exporter()
+def test_exporter_writes_files(tmp_path: Path) -> None:
+    exporter = Exporter(
+        exports_dir=tmp_path / "exports",
+        artifacts_dir=tmp_path / "artifacts",
+    )
 
     tracks = [
         SimpleNamespace(track_id="t1", path="/music/t1.mp3"),
