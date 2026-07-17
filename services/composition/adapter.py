@@ -63,31 +63,39 @@ def adapt_playlist_candidates(
 
     tracks: list[CompositionTrack] = []
     issues: list[CandidateIssue] = []
+    ordered = sorted(
+        candidates,
+        key=lambda item: (
+            _clean_text(item.track_id),
+            _clean_text(item.path),
+        ),
+    )
 
-    for candidate in sorted(candidates, key=lambda item: (item.track_id, item.path)):
-        track_id = candidate.track_id.strip()
-        path = candidate.path.strip()
+    for candidate in ordered:
+        track_id = _clean_text(candidate.track_id)
+        path = _clean_text(candidate.path)
+        bpm = _as_finite_float(candidate.bpm)
+        energy = _as_finite_float(candidate.energy)
+        camelot = normalize_camelot(
+            _clean_text(candidate.camelot) if candidate.camelot is not None else None
+        )
         fatal_codes: list[CandidateIssueCode] = []
 
         if not track_id:
             fatal_codes.append(CandidateIssueCode.INVALID_TRACK_ID)
         if not path:
             fatal_codes.append(CandidateIssueCode.INVALID_PATH)
-        if not _finite_positive(candidate.bpm):
+        if bpm is None or bpm <= 0:
             fatal_codes.append(CandidateIssueCode.INVALID_BPM)
-
-        camelot = normalize_camelot(candidate.camelot)
         if camelot is None:
             fatal_codes.append(CandidateIssueCode.INVALID_CAMELOT)
-
-        if not _finite_range(candidate.energy, minimum=0.0, maximum=1.0):
+        if energy is None or not 0.0 <= energy <= 1.0:
             fatal_codes.append(CandidateIssueCode.INVALID_ENERGY)
 
         if fatal_codes:
-            issue_track_id = track_id or candidate.track_id
             issues.extend(
                 CandidateIssue(
-                    track_id=issue_track_id,
+                    track_id=track_id,
                     code=code,
                     severity=CandidateIssueSeverity.REJECTED,
                 )
@@ -95,8 +103,8 @@ def adapt_playlist_candidates(
             )
             continue
 
-        duration = candidate.duration_seconds
-        if not _finite_positive(duration):
+        duration = _as_finite_float(candidate.duration_seconds)
+        if duration is None or duration <= 0:
             duration = float(duration_fallback_seconds)
             issues.append(
                 CandidateIssue(
@@ -114,10 +122,10 @@ def adapt_playlist_candidates(
                 artist=candidate.artist,
                 genre=candidate.genre or "",
                 source_folder=candidate.source,
-                bpm=float(candidate.bpm),
+                bpm=bpm,
                 camelot=camelot,
-                energy=float(candidate.energy),
-                duration_seconds=max(1, round(float(duration))),
+                energy=energy,
+                duration_seconds=max(1, round(duration)),
             )
         )
 
@@ -127,18 +135,17 @@ def adapt_playlist_candidates(
     )
 
 
-def _finite_positive(value: float | int | None) -> bool:
-    return value is not None and math.isfinite(float(value)) and float(value) > 0
+def _clean_text(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
-def _finite_range(
-    value: float | int | None,
-    *,
-    minimum: float,
-    maximum: float,
-) -> bool:
-    return (
-        value is not None
-        and math.isfinite(float(value))
-        and minimum <= float(value) <= maximum
-    )
+def _as_finite_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        converted = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return converted if math.isfinite(converted) else None
