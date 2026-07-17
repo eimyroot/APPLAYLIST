@@ -4,6 +4,8 @@ from typing import Optional
 
 from data.connection import get_sqlite_connection
 from data.models.analysis_record import AnalysisRecord
+from data.models.playlist_candidate import PlaylistCandidate
+from data.repositories.track_repository import TrackRepository
 
 
 class AnalysisRepository:
@@ -91,3 +93,28 @@ class AnalysisRepository:
             if row is None:
                 return None
             return AnalysisRecord(**dict(row))
+
+    def list_playlist_candidates(self) -> list[PlaylistCandidate]:
+        """Return only analyses that have a non-empty resolvable track path."""
+        self.ensure_schema()
+        TrackRepository().ensure_schema()
+
+        with get_sqlite_connection() as conn:
+            rows = conn.execute(
+                '''
+                SELECT
+                    analyses.track_id,
+                    tracks.path,
+                    tracks.title,
+                    tracks.artist,
+                    analyses.bpm,
+                    analyses.camelot,
+                    analyses.energy
+                FROM analyses
+                INNER JOIN tracks ON tracks.track_id = analyses.track_id
+                WHERE NULLIF(TRIM(tracks.path), '') IS NOT NULL
+                ORDER BY analyses.track_id
+                '''
+            ).fetchall()
+
+        return [PlaylistCandidate(**dict(row)) for row in rows]
