@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-import math
-import re
 
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -62,10 +62,17 @@ class TrackMetadata:
     def __post_init__(self) -> None:
         if not Path(self.source_path).is_absolute():
             raise ValueError("metadata source path must be absolute")
+        if not isinstance(self.provider, str):
+            raise TypeError("metadata provider must be a string")
         if not self.provider.strip():
             raise ValueError("metadata provider is required")
+        if not isinstance(self.provider_version, str):
+            raise TypeError("metadata provider version must be a string")
         if not self.provider_version.strip():
             raise ValueError("metadata provider version is required")
+
+        object.__setattr__(self, "provider", self.provider.strip())
+        object.__setattr__(self, "provider_version", self.provider_version.strip())
 
         origin = self.origin
         if not isinstance(origin, MetadataOrigin):
@@ -78,6 +85,8 @@ class TrackMetadata:
         for field_name in ("title", "artist", "album", "genre"):
             value = getattr(self, field_name)
             if value is not None:
+                if not isinstance(value, str):
+                    raise TypeError(f"{field_name} must be a string")
                 normalized = " ".join(value.split())
                 object.__setattr__(self, field_name, normalized or None)
 
@@ -100,9 +109,16 @@ class TrackMetadata:
                 if value <= 0:
                     raise ValueError(f"{field_name} must be positive")
 
+        normalized_warning_values: set[str] = set()
+        for value in self.warnings:
+            if not isinstance(value, str):
+                raise TypeError("metadata warnings must be strings")
+            normalized = " ".join(value.split())
+            if normalized:
+                normalized_warning_values.add(normalized)
         normalized_warnings = tuple(
             sorted(
-                {" ".join(value.split()) for value in self.warnings if value.strip()},
+                normalized_warning_values,
                 key=lambda value: (value.casefold(), value),
             )
         )
