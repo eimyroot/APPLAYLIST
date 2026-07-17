@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     enable_external_connectors: bool = False
     enable_advanced_structure: bool = False
     enable_generative_preview: bool = False
+    enable_composition_comparison: bool = False
 
     artifacts_dir: str = "./artifacts"
     exports_dir: str = "./exports"

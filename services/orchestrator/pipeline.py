@@ -1,10 +1,29 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
+from typing import Protocol
 from uuid import uuid4
 
+from core.config.settings import get_settings
 from services.composer.composer import Composer
+from services.composition.hook import PipelineCompositionComparisonHook
 from services.export.exporter import Exporter
+
+
+logger = logging.getLogger(__name__)
+
+
+class PipelineComparisonObserver(Protocol):
+    def observe(
+        self,
+        *,
+        legacy_track_ids: tuple[str, ...],
+        target_track_count: int,
+        bpm_min: float | None,
+        bpm_max: float | None,
+        mode: str | None,
+    ) -> object: ...
 
 
 def _new_pipeline_run_id() -> str:
@@ -18,10 +37,19 @@ class OrchestratorPipeline:
         composer: Composer | None = None,
         exporter: Exporter | None = None,
         run_id_factory: Callable[[], str] | None = None,
+        comparison_hook: PipelineComparisonObserver | None = None,
+        comparison_enabled: bool | None = None,
     ) -> None:
-        self.composer = composer or Composer()
-        self.exporter = exporter or Exporter()
+        self.composer = composer if composer is not None else Composer()
+        self.exporter = exporter if exporter is not None else Exporter()
         self._run_id_factory = run_id_factory or _new_pipeline_run_id
+
+        if comparison_enabled is None:
+            comparison_enabled = get_settings().enable_composition_comparison
+        self._comparison_enabled = comparison_enabled
+        self._comparison_hook = comparison_hook
+        if self._comparison_enabled and self._comparison_hook is None:
+            self._comparison_hook = PipelineCompositionComparisonHook()
 
     def run(
         self,
@@ -44,6 +72,14 @@ class OrchestratorPipeline:
             tracks=playlist,
         )
 
+        self._observe_composition(
+            playlist=playlist,
+            limit=limit,
+            bpm_min=bpm_min,
+            bpm_max=bpm_max,
+            mode=mode,
+        )
+
         return {
             "input": {
                 "path": path,
@@ -56,3 +92,29 @@ class OrchestratorPipeline:
             "count": len(playlist),
             "export": export,
         }
+
+    def _observe_composition(
+        self,
+        *,
+        playlist: list,
+        limit: int,
+        bpm_min: float | None,
+        bpm_max: float | None,
+        mode: str | None,
+    ) -> None:
+        if not self._comparison_enabled or self._comparison_hook is None:
+            return
+
+        try:
+            self._comparison_hook.observe(
+                legacy_track_ids=tuple(track.track_id for track in playlist),
+                target_track_count=limit,
+                bpm_min=bpm_min,
+                bpm_max=bpm_max,
+                mode=mode,
+            )
+        except Exception:
+            logger.warning(
+                "composition comparison hook failed; legacy export preserved",
+                exc_info=True,
+            )
