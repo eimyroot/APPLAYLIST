@@ -12,9 +12,9 @@ from api.core.observability import (
     validation_exception_handler,
 )
 from api.middleware.request_context import RequestContextMiddleware
-from api.routes.health import router as health_router
-from api.routes.jobs import router as jobs_router
-from api.routes.pipeline import router as pipeline_router
+from api.routes.health import create_health_router
+from api.routes.jobs import create_jobs_router
+from api.routes.pipeline import create_pipeline_router
 from api.security.auth_gate import ApiKeyAuthMiddleware
 from api.security.bootstrap import apply_security_hardening
 from api.security.settings import SecuritySettings
@@ -35,9 +35,9 @@ def create_app(security_settings: SecuritySettings | None = None) -> FastAPI:
     application.add_middleware(ApiKeyAuthMiddleware, security_settings=config)
     application.middleware("http")(log_request_response)
 
-    application.include_router(health_router)
-    application.include_router(jobs_router)
-    application.include_router(pipeline_router)
+    application.include_router(create_health_router())
+    application.include_router(create_jobs_router())
+    application.include_router(create_pipeline_router())
 
     application.add_exception_handler(StarletteHTTPException, http_exception_handler)
     application.add_exception_handler(RequestValidationError, validation_exception_handler)
