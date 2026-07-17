@@ -25,7 +25,6 @@ class PipelineComparisonObserver(Protocol):
     def observe(
         self,
         *,
-        run_id: str,
         legacy_track_ids: tuple[str, ...],
         target_track_count: int,
         bpm_min: float | None,
@@ -45,7 +44,7 @@ class OrchestratorPipeline:
         composer: Composer | None = None,
         exporter: Exporter | None = None,
         run_id_factory: Callable[[], str] | None = None,
-        comparison_hook: PipelineComparisonObserver | None = None,
+        comparison_hook: object | None = None,
         comparison_enabled: bool | None = None,
     ) -> None:
         self.composer = composer if composer is not None else Composer()
@@ -85,8 +84,6 @@ class OrchestratorPipeline:
         bpm_max: float | None = None,
         mode: str | None = None,
     ) -> dict:
-        # Current clean MVP behavior:
-        # compose from precomputed DB analyses joined to track paths, then export.
         playlist = self.composer.compose(limit=limit)
         playlist_id = self._run_id_factory()
 
@@ -134,15 +131,22 @@ class OrchestratorPipeline:
         if not self._comparison_enabled or self._comparison_hook is None:
             return
 
+        arguments = {
+            "legacy_track_ids": tuple(track.track_id for track in playlist),
+            "target_track_count": limit,
+            "bpm_min": bpm_min,
+            "bpm_max": bpm_max,
+            "mode": mode,
+        }
+
         try:
-            self._comparison_hook.observe(
-                run_id=run_id,
-                legacy_track_ids=tuple(track.track_id for track in playlist),
-                target_track_count=limit,
-                bpm_min=bpm_min,
-                bpm_max=bpm_max,
-                mode=mode,
-            )
+            observe_run = getattr(self._comparison_hook, "observe_run", None)
+            if callable(observe_run):
+                observe_run(run_id=run_id, **arguments)
+                return
+
+            observe = getattr(self._comparison_hook, "observe")
+            observe(**arguments)
         except Exception:
             logger.warning(
                 "composition comparison hook failed; legacy export preserved",
