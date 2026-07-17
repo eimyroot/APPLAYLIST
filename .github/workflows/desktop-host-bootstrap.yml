@@ -73,7 +73,17 @@ jobs:
         run: cargo fmt --manifest-path desktop/tauri/Cargo.toml
 
       - name: Rust clippy gate
-        run: cargo clippy --manifest-path desktop/tauri/Cargo.toml --all-targets --locked -- -D warnings
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/desktop-host
+          cargo clippy \
+            --manifest-path desktop/tauri/Cargo.toml \
+            --all-targets \
+            --locked \
+            -- \
+            -D warnings \
+            2>&1 | tee "artifacts/desktop-host/clippy-${RUNNER_OS}.log"
 
       - name: Rust unit tests
         run: cargo test --manifest-path desktop/tauri/Cargo.toml --locked
