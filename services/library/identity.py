@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -57,15 +58,17 @@ class ContentTrackIdentityService:
             )
 
         try:
-            before = resolved.stat()
+            path_before = resolved.stat()
             digest = hashlib.sha256()
             with resolved.open("rb") as handle:
+                fd_before = os.fstat(handle.fileno())
                 while True:
                     chunk = handle.read(self._chunk_size)
                     if not chunk:
                         break
                     digest.update(chunk)
-            after = resolved.stat()
+                fd_after = os.fstat(handle.fileno())
+            path_after = resolved.stat()
         except OSError as exc:
             raise TrackIdentityError(
                 path=str(resolved),
@@ -73,7 +76,19 @@ class ContentTrackIdentityService:
                 detail="track identity source could not be read",
             ) from exc
 
-        if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+        identities = {
+            (path_before.st_dev, path_before.st_ino),
+            (fd_before.st_dev, fd_before.st_ino),
+            (fd_after.st_dev, fd_after.st_ino),
+            (path_after.st_dev, path_after.st_ino),
+        }
+        snapshots = {
+            (path_before.st_size, path_before.st_mtime_ns),
+            (fd_before.st_size, fd_before.st_mtime_ns),
+            (fd_after.st_size, fd_after.st_mtime_ns),
+            (path_after.st_size, path_after.st_mtime_ns),
+        }
+        if len(identities) != 1 or len(snapshots) != 1:
             raise TrackIdentityError(
                 path=str(resolved),
                 code="identity_file_changed",
@@ -86,6 +101,6 @@ class ContentTrackIdentityService:
             digest_algorithm="sha256",
             digest_hex=digest_hex,
             source_path=str(resolved),
-            size_bytes=after.st_size,
-            mtime_ns=after.st_mtime_ns,
+            size_bytes=fd_after.st_size,
+            mtime_ns=fd_after.st_mtime_ns,
         )
