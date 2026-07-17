@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from data.models.playlist_candidate import PlaylistCandidate
@@ -19,6 +21,29 @@ class PlaylistCandidateRepository(Protocol):
     def list_playlist_candidates(self) -> list[PlaylistCandidate]: ...
 
 
+def normalize_source_path(value: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("source_path must be a non-empty absolute path")
+    candidate = Path(os.path.normpath(value.strip()))
+    if not candidate.is_absolute():
+        raise ValueError("source_path must be an absolute path")
+    return str(candidate)
+
+
+def candidate_is_within_source_path(
+    candidate: PlaylistCandidate,
+    source_path: str,
+) -> bool:
+    raw_path = candidate.path
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        return False
+    candidate_path = Path(os.path.normpath(raw_path.strip()))
+    if not candidate_path.is_absolute():
+        return False
+    scope = Path(source_path)
+    return candidate_path == scope or scope in candidate_path.parents
+
+
 @dataclass(frozen=True, slots=True)
 class CanonicalCompositionExecutionRequest:
     target_track_count: int
@@ -28,6 +53,7 @@ class CanonicalCompositionExecutionRequest:
     genre: str | None = None
     start_key: str | None = None
     duration_fallback_seconds: int = 300
+    source_path: str | None = None
 
     def __post_init__(self) -> None:
         if self.target_track_count <= 0:
@@ -38,6 +64,12 @@ class CanonicalCompositionExecutionRequest:
             raise ValueError("bpm_min must be less than or equal to bpm_max")
         if self.duration_fallback_seconds <= 0:
             raise ValueError("duration_fallback_seconds must be greater than zero")
+        if self.source_path is not None:
+            object.__setattr__(
+                self,
+                "source_path",
+                normalize_source_path(self.source_path),
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +108,12 @@ class CanonicalCompositionRunner:
     ) -> CanonicalCompositionExecutionResult:
         mode = parse_composition_mode(request.mode)
         candidates = self._repository.list_playlist_candidates()
+        if request.source_path is not None:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if candidate_is_within_source_path(candidate, request.source_path)
+            ]
         adaptation = adapt_playlist_candidates(
             candidates,
             duration_fallback_seconds=request.duration_fallback_seconds,
