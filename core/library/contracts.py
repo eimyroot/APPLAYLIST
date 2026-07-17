@@ -48,10 +48,14 @@ class LibraryScanPolicy:
             raise TypeError("recursive must be boolean")
         if not isinstance(self.include_hidden, bool):
             raise TypeError("include_hidden must be boolean")
-        if isinstance(self.max_entries, bool) or self.max_entries <= 0:
-            raise ValueError("max_entries must be a positive integer")
-        if isinstance(self.max_files, bool) or self.max_files <= 0:
-            raise ValueError("max_files must be a positive integer")
+        if not isinstance(self.max_entries, int) or isinstance(self.max_entries, bool):
+            raise TypeError("max_entries must be an integer")
+        if self.max_entries <= 0:
+            raise ValueError("max_entries must be positive")
+        if not isinstance(self.max_files, int) or isinstance(self.max_files, bool):
+            raise TypeError("max_files must be an integer")
+        if self.max_files <= 0:
+            raise ValueError("max_files must be positive")
 
         policy = self.symlink_policy
         if not isinstance(policy, SymlinkPolicy):
@@ -98,13 +102,19 @@ class LibraryScanResult:
         root = Path(self.root)
         if not root.is_absolute():
             raise ValueError("scan result root must be absolute")
-        if isinstance(self.discovered_entries, bool) or self.discovered_entries < 0:
-            raise ValueError("discovered_entries must be a non-negative integer")
+        if not isinstance(self.discovered_entries, int) or isinstance(
+            self.discovered_entries,
+            bool,
+        ):
+            raise TypeError("discovered_entries must be an integer")
+        if self.discovered_entries < 0:
+            raise ValueError("discovered_entries must be non-negative")
         if any(not Path(path).is_absolute() for path in self.accepted_paths):
             raise ValueError("accepted paths must be absolute")
         if len(set(self.accepted_paths)) != len(self.accepted_paths):
             raise ValueError("accepted paths must be unique")
-        if tuple(sorted(self.accepted_paths, key=str.casefold)) != self.accepted_paths:
+        sort_key = lambda value: (value.casefold(), value)
+        if tuple(sorted(self.accepted_paths, key=sort_key)) != self.accepted_paths:
             raise ValueError("accepted paths must be deterministically sorted")
         for value, name in (
             (self.cancelled, "cancelled"),
