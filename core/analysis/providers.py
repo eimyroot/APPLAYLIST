@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from core.analysis.provider_contract import (
+    ProviderDependencyMissingError,
     ProviderUnavailableError,
     UnknownProviderError,
 )
@@ -97,6 +98,13 @@ def list_analyzer_providers() -> Dict[str, AnalyzerProviderInfo]:
     return infos
 
 
+def _raise_unavailable(info: AnalyzerProviderInfo) -> None:
+    message = f"Preferred provider unavailable: {info.name} ({info.reason})"
+    if info.reason.endswith("not installed"):
+        raise ProviderDependencyMissingError(message, provider=info.name)
+    raise ProviderUnavailableError(message, provider=info.name)
+
+
 def select_best_provider(preferred: Optional[str] = None) -> BaseAnalyzerProvider:
     providers = {
         "librosa": LibrosaAnalyzerProvider,
@@ -112,10 +120,7 @@ def select_best_provider(preferred: Optional[str] = None) -> BaseAnalyzerProvide
             )
         info = providers[normalized].is_available()
         if not info.available:
-            raise ProviderUnavailableError(
-                f"Preferred provider unavailable: {normalized} ({info.reason})",
-                provider=normalized,
-            )
+            _raise_unavailable(info)
         return providers[normalized]()
 
     for name in ("librosa", "essentia"):
