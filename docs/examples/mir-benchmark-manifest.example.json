@@ -1,0 +1,37 @@
+{
+  "schema_version": "applaylist-mir-benchmark-manifest-v1",
+  "dataset": {
+    "name": "private-dj-evaluation",
+    "version": "2026-07-v1",
+    "source": "locally controlled collection; audio stored outside repository",
+    "license": "private-owner-authorized-evaluation-only",
+    "checksum": "sha256:replace-with-dataset-manifest-checksum"
+  },
+  "items": [
+    {
+      "id": "track-0001",
+      "path": "house/track-0001.wav",
+      "reference": {
+        "bpm": 128.0,
+        "alternate_bpms": [64.0],
+        "key": {
+          "tonic": "A",
+          "scale": "minor",
+          "camelot": "8A"
+        },
+        "energy_rank": 5.0
+      }
+    },
+    {
+      "id": "track-0002",
+      "path": "techno/track-0002.flac",
+      "reference": {
+        "bpm": 132.0,
+        "key": {
+          "camelot": "9A"
+        },
+        "energy_rank": 8.0
+      }
+    }
+  ]
+}
