@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 def _as_bool(value: str | None, default: bool) -> bool:
@@ -19,19 +19,35 @@ def _as_int(value: str | None, default: int) -> int:
 
 @dataclass(frozen=True)
 class SecuritySettings:
-    app_env: str = os.getenv("APP_ENV", os.getenv("ENV", "development"))
-    allowed_origins_raw: str = os.getenv("ALLOW_ORIGINS", "*")
-    rate_limit_per_minute: int = _as_int(os.getenv("RATE_LIMIT_PER_MINUTE"), 120)
-    max_request_bytes: int = _as_int(os.getenv("MAX_REQUEST_BYTES"), 2 * 1024 * 1024)
-    trusted_proxy_depth: int = _as_int(os.getenv("TRUSTED_PROXY_DEPTH"), 0)
-    enable_security_headers: bool = _as_bool(os.getenv("ENABLE_SECURITY_HEADERS"), True)
-    enable_request_size_guard: bool = _as_bool(os.getenv("ENABLE_REQUEST_SIZE_GUARD"), True)
-    enable_rate_limit: bool = _as_bool(os.getenv("ENABLE_RATE_LIMIT"), True)
+    """Immutable security configuration captured from the current environment."""
 
-    # Bundle 13
-    auth_enabled_raw: bool = _as_bool(os.getenv("AUTH_ENABLED"), False)
-    api_key: str = os.getenv("API_KEY", "")
-    api_key_header_name: str = os.getenv("API_KEY_HEADER_NAME", "X-API-Key")
+    app_env: str = field(default_factory=lambda: os.getenv("APP_ENV", os.getenv("ENV", "development")))
+    allowed_origins_raw: str = field(default_factory=lambda: os.getenv("ALLOW_ORIGINS", "*"))
+    rate_limit_per_minute: int = field(
+        default_factory=lambda: _as_int(os.getenv("RATE_LIMIT_PER_MINUTE"), 120)
+    )
+    max_request_bytes: int = field(
+        default_factory=lambda: _as_int(os.getenv("MAX_REQUEST_BYTES"), 2 * 1024 * 1024)
+    )
+    trusted_proxy_depth: int = field(
+        default_factory=lambda: _as_int(os.getenv("TRUSTED_PROXY_DEPTH"), 0)
+    )
+    enable_security_headers: bool = field(
+        default_factory=lambda: _as_bool(os.getenv("ENABLE_SECURITY_HEADERS"), True)
+    )
+    enable_request_size_guard: bool = field(
+        default_factory=lambda: _as_bool(os.getenv("ENABLE_REQUEST_SIZE_GUARD"), True)
+    )
+    enable_rate_limit: bool = field(
+        default_factory=lambda: _as_bool(os.getenv("ENABLE_RATE_LIMIT"), True)
+    )
+    auth_enabled_raw: bool = field(
+        default_factory=lambda: _as_bool(os.getenv("AUTH_ENABLED"), False)
+    )
+    api_key: str = field(default_factory=lambda: os.getenv("API_KEY", ""))
+    api_key_header_name: str = field(
+        default_factory=lambda: os.getenv("API_KEY_HEADER_NAME", "X-API-Key")
+    )
 
     @property
     def is_production(self) -> bool:
@@ -47,8 +63,10 @@ class SecuritySettings:
     @property
     def auth_enabled(self) -> bool:
         if self.is_production:
-            return True if self.auth_enabled_raw or self.api_key else False
+            return bool(self.auth_enabled_raw or self.api_key)
         return self.auth_enabled_raw
 
 
+# Backward-compatible process snapshot. New application instances should receive
+# a freshly constructed SecuritySettings object through create_app().
 settings = SecuritySettings()
