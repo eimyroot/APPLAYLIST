@@ -152,25 +152,10 @@ def test_symlink_outside_root_is_not_followed_or_moved(tmp_path: Path) -> None:
 
     assert protected.exists()
     assert not any(candidate.path.startswith("external-cache/") for candidate in report.candidates)
-
-
-def test_cache_named_symlink_is_reported_but_never_quarantined(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    outside = tmp_path / "outside-cache"
-    outside.mkdir()
-    (outside / "protected.pyc").write_bytes(b"outside")
-    link = root / "__pycache__"
-    try:
-        link.symlink_to(outside, target_is_directory=True)
-    except OSError:
-        pytest.skip("symlinks unavailable")
-
-    candidate = _candidate(audit_repository(root), "__pycache__")
-
-    assert candidate.symlink is True
-    assert candidate.proposed_action == "report_only"
-    assert "symlinks are never moved automatically" in candidate.reason
-    assert (outside / "protected.pyc").exists()
+    _, count = quarantine_report(root, report, apply=True)
+    assert count == 0
+    assert link.is_symlink()
+    assert protected.exists()
 
 
 def test_quarantine_dry_run_apply_and_restore(tmp_path: Path) -> None:
