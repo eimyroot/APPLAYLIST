@@ -38,31 +38,12 @@ class LibraryCandidateImporter:
         for path in sorted(scan_result.accepted_paths, key=_text_sort_key):
             try:
                 identity = self._identity_service.identify(path)
-                metadata = self._metadata_reader.read(identity.source_path)
             except TrackIdentityError as exc:
                 issues.append(
                     TrackImportIssue(
                         path=exc.path,
                         code=exc.code,
                         detail=exc.detail,
-                    )
-                )
-                continue
-            except MetadataReadError as exc:
-                issues.append(
-                    TrackImportIssue(
-                        path=exc.path,
-                        code=exc.code,
-                        detail=exc.detail,
-                    )
-                )
-                continue
-            except (TypeError, ValueError) as exc:
-                issues.append(
-                    TrackImportIssue(
-                        path=path,
-                        code="metadata_output_invalid",
-                        detail=str(exc) or "metadata reader returned invalid output",
                     )
                 )
                 continue
@@ -78,7 +59,28 @@ class LibraryCandidateImporter:
                 )
                 continue
 
-            candidate = TrackImportCandidate(identity=identity, metadata=metadata)
+            try:
+                metadata = self._metadata_reader.read(identity.source_path)
+                candidate = TrackImportCandidate(identity=identity, metadata=metadata)
+            except MetadataReadError as exc:
+                issues.append(
+                    TrackImportIssue(
+                        path=exc.path,
+                        code=exc.code,
+                        detail=exc.detail,
+                    )
+                )
+                continue
+            except (AttributeError, TypeError, ValueError) as exc:
+                issues.append(
+                    TrackImportIssue(
+                        path=identity.source_path,
+                        code="metadata_output_invalid",
+                        detail=str(exc) or "metadata reader returned invalid output",
+                    )
+                )
+                continue
+
             candidates.append(candidate)
             seen_track_ids[identity.track_id] = identity.source_path
 
