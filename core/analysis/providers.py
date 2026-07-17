@@ -5,6 +5,12 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+from core.analysis.provider_contract import (
+    ProviderDependencyMissingError,
+    ProviderUnavailableError,
+    UnknownProviderError,
+)
+
 
 @dataclass(frozen=True)
 class AnalyzerProviderInfo:
@@ -18,7 +24,11 @@ class BaseAnalyzerProvider:
 
     @classmethod
     def is_available(cls) -> AnalyzerProviderInfo:
-        return AnalyzerProviderInfo(name=cls.name, available=False, reason="not implemented")
+        return AnalyzerProviderInfo(
+            name=cls.name,
+            available=False,
+            reason="not implemented",
+        )
 
     def analyze(self, path: str) -> Dict[str, Any]:
         raise NotImplementedError
@@ -31,7 +41,11 @@ class LibrosaAnalyzerProvider(BaseAnalyzerProvider):
     def is_available(cls) -> AnalyzerProviderInfo:
         spec = importlib.util.find_spec("librosa")
         if spec is None:
-            return AnalyzerProviderInfo(name=cls.name, available=False, reason="librosa not installed")
+            return AnalyzerProviderInfo(
+                name=cls.name,
+                available=False,
+                reason="librosa not installed",
+            )
         return AnalyzerProviderInfo(name=cls.name, available=True, reason="ok")
 
     def analyze(self, path: str) -> Dict[str, Any]:
@@ -56,7 +70,11 @@ class EssentiaAnalyzerProvider(BaseAnalyzerProvider):
 
         py_spec = importlib.util.find_spec("essentia")
         if py_spec is not None:
-            return AnalyzerProviderInfo(name=cls.name, available=True, reason="python essentia available")
+            return AnalyzerProviderInfo(
+                name=cls.name,
+                available=True,
+                reason="python essentia available",
+            )
 
         return AnalyzerProviderInfo(
             name=cls.name,
@@ -74,10 +92,17 @@ class EssentiaAnalyzerProvider(BaseAnalyzerProvider):
 
 def list_analyzer_providers() -> Dict[str, AnalyzerProviderInfo]:
     infos = {}
-    for cls in (LibrosaAnalyzerProvider, EssentiaAnalyzerProvider):
-        info = cls.is_available()
-        infos[cls.name] = info
+    for provider_class in (LibrosaAnalyzerProvider, EssentiaAnalyzerProvider):
+        info = provider_class.is_available()
+        infos[provider_class.name] = info
     return infos
+
+
+def _raise_unavailable(info: AnalyzerProviderInfo) -> None:
+    message = f"Preferred provider unavailable: {info.name} ({info.reason})"
+    if info.reason.endswith("not installed"):
+        raise ProviderDependencyMissingError(message, provider=info.name)
+    raise ProviderUnavailableError(message, provider=info.name)
 
 
 def select_best_provider(preferred: Optional[str] = None) -> BaseAnalyzerProvider:
@@ -87,17 +112,20 @@ def select_best_provider(preferred: Optional[str] = None) -> BaseAnalyzerProvide
     }
 
     if preferred:
-        preferred = preferred.strip().lower()
-        if preferred not in providers:
-            raise ValueError(f"Unknown provider: {preferred}")
-        info = providers[preferred].is_available()
+        normalized = preferred.strip().lower()
+        if normalized not in providers:
+            raise UnknownProviderError(
+                f"Unknown provider: {normalized}",
+                provider=normalized,
+            )
+        info = providers[normalized].is_available()
         if not info.available:
-            raise RuntimeError(f"Preferred provider unavailable: {preferred} ({info.reason})")
-        return providers[preferred]()
+            _raise_unavailable(info)
+        return providers[normalized]()
 
     for name in ("librosa", "essentia"):
         info = providers[name].is_available()
         if info.available:
             return providers[name]()
 
-    raise RuntimeError("No analyzer provider available")
+    raise ProviderUnavailableError("No analyzer provider available")
