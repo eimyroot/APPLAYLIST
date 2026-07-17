@@ -1,0 +1,88 @@
+name: Desktop Sidecar Proof
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-sidecar-proof.yml"
+      - "services/desktop/**"
+      - "scripts/applaylist_sidecar_entry.py"
+      - "scripts/build_desktop_sidecar.py"
+      - "scripts/smoke_desktop_sidecar.py"
+      - "tests/test_desktop_readiness_sidecar.py"
+      - "pyproject.toml"
+  push:
+    branches:
+      - "feature/bundle-48a-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-sidecar-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-proof:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install project and pinned packager
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,desktop-build]"
+
+      - name: Sidecar unit and process tests
+        run: python -m pytest -q tests/test_desktop_readiness_sidecar.py
+
+      - name: Build target-native sidecar
+        run: python scripts/build_desktop_sidecar.py
+
+      - name: Smoke packaged sidecar
+        run: |
+          python scripts/smoke_desktop_sidecar.py \
+            artifacts/desktop-sidecar/package-manifest.json \
+            | tee artifacts/desktop-sidecar/smoke-evidence.json
+
+      - name: Verify package manifest
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("artifacts/desktop-sidecar/package-manifest.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert manifest["schema_version"] == "applaylist-sidecar-package-v1"
+          assert manifest["mode"] == "onedir"
+          assert manifest["size_bytes"] > 0
+          executable = Path(manifest["executable"])
+          assert executable.is_file(), executable
+          print(json.dumps(manifest, sort_keys=True))
+          PY
+
+      - name: Upload packaged proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-sidecar-${{ runner.os }}-${{ matrix.python-version }}
+          path: artifacts/desktop-sidecar/
+          if-no-files-found: error
+          retention-days: 14
