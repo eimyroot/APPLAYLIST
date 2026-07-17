@@ -24,7 +24,7 @@ This document is an engineering control, not legal advice. Final commercial dist
 | NumPy | numerical baseline | approved_dev | verify binary-wheel notices in packaged app |
 | SciPy | signal-processing baseline | approved_dev | verify binary-wheel notices in packaged app |
 | SoundFile | audio decode boundary | approved_dev | audit bundled native `libsndfile` obligations |
-| Librosa | baseline MIR candidate | approved_dev | benchmark; move behind lazy provider boundary |
+| Librosa | lazy baseline MIR candidate | approved_dev | benchmark quality/runtime; retain provenance; do not approve as production default before Bundle 46 decision gate |
 | TinyTag 2.2.1 | read-only audio metadata | approved_dev | retain MIT notice; verify exact resolved version and packaged SBOM before distribution |
 
 `approved_dev` does not automatically mean approved for a signed commercial installer.
@@ -42,10 +42,21 @@ Product preference is the smallest read-only metadata dependency that satisfies 
 
 | Component | Candidate use | State | Decision notes |
 |---|---|---|---|
+| Librosa + NumPy/SciPy/SoundFile | local baseline BPM/key/energy evaluation | approved_dev | implemented behind lazy provider boundary; no provider-side persistence; confidence and energy remain internal/uncalibrated until benchmark; exact resolved versions and native-library notices required for distribution |
 | Essentia | advanced BPM/key/energy benchmark | experiment_only | commercial distribution requires explicit licensing decision; model licenses must be evaluated individually |
 | Essentia pretrained models | optional ML descriptors | review_required | no model may be downloaded or shipped without per-model license record |
 | madmom | beat/downbeat research | review_required | release age, compatibility and model-data restrictions require review; not an MVP dependency |
 | remote audio-analysis API | analysis provider | rejected for MVP | conflicts with local-first privacy and reproducibility goals unless separately approved |
+
+### Bundle 45 Librosa baseline decision
+
+- approved only for development, CI and controlled local benchmark evaluation,
+- not approved as the production-authoritative provider,
+- no claim of parity with Mixed In Key or another commercial analyzer,
+- provider imports remain lazy so mandatory API/config imports do not load audio backends,
+- analysis stays local and performs no network upload,
+- provider emits dependency and algorithm provenance,
+- the packaged-app decision remains blocked on Bundle 46 quality/runtime evidence and native dependency review.
 
 ## Desktop candidates
 
