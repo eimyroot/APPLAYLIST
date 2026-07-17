@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping
 
@@ -49,6 +50,15 @@ class CanonicalAnalysisResult:
     genre_hint: str | None
     analysis_status: str = "ok"
     analysis_version: str = "canonical-mir-v1"
+    key_tonic: str | None = None
+    key_scale: str | None = None
+    camelot: str | None = None
+    beat_stability: float | None = None
+    harmonic_ratio: float | None = None
+    percussive_ratio: float | None = None
+    provider_version: str | None = None
+    algorithm_version: str | None = None
+    warnings: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -111,7 +121,13 @@ def _bounded(
     return value
 
 
-def _optional_text(value: Any, field: str, provider: str) -> str | None:
+def _optional_text(
+    value: Any,
+    field: str,
+    provider: str,
+    *,
+    maximum_length: int = 128,
+) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
@@ -122,12 +138,46 @@ def _optional_text(value: Any, field: str, provider: str) -> str | None:
     normalized = value.strip()
     if not normalized:
         return None
-    if len(normalized) > 128:
+    if len(normalized) > maximum_length:
         raise ProviderOutputInvalid(
             f"Provider field '{field}' is too long",
             provider=provider,
         )
     return normalized
+
+
+def _optional_camelot(value: Any, provider: str) -> str | None:
+    normalized = _optional_text(value, "camelot", provider, maximum_length=3)
+    if normalized is None:
+        return None
+    normalized = normalized.upper()
+    if re.fullmatch(r"(?:[1-9]|1[0-2])[AB]", normalized) is None:
+        raise ProviderOutputInvalid(
+            "Provider field 'camelot' must be between 1A and 12B",
+            provider=provider,
+        )
+    return normalized
+
+
+def _warnings(value: Any, provider: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)):
+        raise ProviderOutputInvalid(
+            "Provider field 'warnings' must be an array",
+            provider=provider,
+        )
+    if len(value) > 32:
+        raise ProviderOutputInvalid(
+            "Provider field 'warnings' contains too many entries",
+            provider=provider,
+        )
+    normalized: list[str] = []
+    for item in value:
+        text = _optional_text(item, "warnings", provider, maximum_length=256)
+        if text is not None and text not in normalized:
+            normalized.append(text)
+    return tuple(normalized)
 
 
 def normalize_provider_result(
@@ -169,6 +219,7 @@ def normalize_provider_result(
     beat = _as_mapping(raw_result.get("beat"), "beat", provider)
     metrics = _as_mapping(raw_result.get("metrics"), "metrics", provider)
     tags = _as_mapping(raw_result.get("tags"), "tags", provider)
+    provenance = _as_mapping(raw_result.get("provenance"), "provenance", provider)
 
     raw_key = raw_result.get("key")
     key_block = _as_mapping(raw_key, "key", provider) if not isinstance(raw_key, str) else {}
@@ -178,15 +229,30 @@ def normalize_provider_result(
         raw_result.get("bpm_confidence"),
         beat.get("confidence"),
     )
+    beat_stability_raw = _first_not_none(
+        raw_result.get("beat_stability"),
+        beat.get("stability"),
+    )
 
     if isinstance(raw_key, Mapping):
-        key_raw = _first_not_none(raw_key.get("camelot"), raw_key.get("key"))
+        key_raw = _first_not_none(
+            raw_key.get("camelot"),
+            raw_key.get("key"),
+            raw_key.get("tonic"),
+        )
     else:
         key_raw = raw_key
     key_confidence_raw = _first_not_none(
         raw_result.get("key_confidence"),
         key_block.get("confidence"),
     )
+    tonic_raw = _first_not_none(raw_result.get("key_tonic"), key_block.get("tonic"))
+    scale_raw = _first_not_none(raw_result.get("key_scale"), key_block.get("scale"))
+    camelot_raw = _first_not_none(raw_result.get("camelot"), key_block.get("camelot"))
+    if camelot_raw is None and isinstance(raw_key, str):
+        candidate = raw_key.strip().upper()
+        if re.fullmatch(r"(?:[1-9]|1[0-2])[AB]", candidate):
+            camelot_raw = candidate
 
     energy_raw = _first_not_none(
         raw_result.get("energy"),
@@ -200,6 +266,14 @@ def normalize_provider_result(
         raw_result.get("duration_seconds"),
         raw_result.get("duration_sec"),
         metrics.get("duration_seconds"),
+    )
+    harmonic_ratio_raw = _first_not_none(
+        raw_result.get("harmonic_ratio"),
+        metrics.get("harmonic_ratio"),
+    )
+    percussive_ratio_raw = _first_not_none(
+        raw_result.get("percussive_ratio"),
+        metrics.get("percussive_ratio"),
     )
     genre_raw = _first_not_none(
         raw_result.get("genre_hint"),
@@ -221,6 +295,13 @@ def normalize_provider_result(
         minimum=0.0,
         maximum=1.0,
     )
+    beat_stability = _bounded(
+        _as_optional_float(beat_stability_raw, "beat_stability", provider),
+        "beat_stability",
+        provider,
+        minimum=0.0,
+        maximum=1.0,
+    )
     key_confidence = _bounded(
         _as_optional_float(key_confidence_raw, "key_confidence", provider),
         "key_confidence",
@@ -231,6 +312,20 @@ def normalize_provider_result(
     energy = _bounded(
         _as_optional_float(energy_raw, "energy", provider),
         "energy",
+        provider,
+        minimum=0.0,
+        maximum=1.0,
+    )
+    harmonic_ratio = _bounded(
+        _as_optional_float(harmonic_ratio_raw, "harmonic_ratio", provider),
+        "harmonic_ratio",
+        provider,
+        minimum=0.0,
+        maximum=1.0,
+    )
+    percussive_ratio = _bounded(
+        _as_optional_float(percussive_ratio_raw, "percussive_ratio", provider),
+        "percussive_ratio",
         provider,
         minimum=0.0,
         maximum=1.0,
@@ -246,15 +341,42 @@ def normalize_provider_result(
             provider=provider,
         )
 
+    camelot = _optional_camelot(camelot_raw, provider)
+    key = _optional_text(key_raw, "key", provider)
+    if camelot is not None:
+        key = camelot
+
     return CanonicalAnalysisResult(
         path=path.strip(),
         provider=provider,
         bpm=bpm,
         bpm_confidence=bpm_confidence,
-        key=_optional_text(key_raw, "key", provider),
+        key=key,
         key_confidence=key_confidence,
         energy=energy,
         loudness_db=_as_optional_float(loudness_raw, "loudness_db", provider),
         duration_seconds=duration_seconds,
         genre_hint=_optional_text(genre_raw, "genre_hint", provider),
+        key_tonic=_optional_text(tonic_raw, "key_tonic", provider, maximum_length=8),
+        key_scale=_optional_text(scale_raw, "key_scale", provider, maximum_length=16),
+        camelot=camelot,
+        beat_stability=beat_stability,
+        harmonic_ratio=harmonic_ratio,
+        percussive_ratio=percussive_ratio,
+        provider_version=_optional_text(
+            _first_not_none(raw_result.get("provider_version"), provenance.get("provider_version")),
+            "provider_version",
+            provider,
+            maximum_length=64,
+        ),
+        algorithm_version=_optional_text(
+            _first_not_none(
+                raw_result.get("algorithm_version"),
+                provenance.get("algorithm_version"),
+            ),
+            "algorithm_version",
+            provider,
+            maximum_length=128,
+        ),
+        warnings=_warnings(raw_result.get("warnings"), provider),
     )
