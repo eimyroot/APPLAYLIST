@@ -12,6 +12,7 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 class MetadataOrigin(str, Enum):
     TAGS = "tags"
+    TAGS_WITH_FILENAME_FALLBACK = "tags_with_filename_fallback"
     FILENAME_FALLBACK = "filename_fallback"
 
 

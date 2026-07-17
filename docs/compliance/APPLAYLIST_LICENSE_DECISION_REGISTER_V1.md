@@ -25,6 +25,7 @@ This document is an engineering control, not legal advice. Final commercial dist
 | SciPy | signal-processing baseline | approved_dev | verify binary-wheel notices in packaged app |
 | SoundFile | audio decode boundary | approved_dev | audit bundled native `libsndfile` obligations |
 | Librosa | baseline MIR candidate | approved_dev | benchmark; move behind lazy provider boundary |
+| TinyTag 2.2.1 | read-only audio metadata | approved_dev | retain MIT notice; verify exact resolved version and packaged SBOM before distribution |
 
 `approved_dev` does not automatically mean approved for a signed commercial installer.
 
@@ -32,8 +33,8 @@ This document is an engineering control, not legal advice. Final commercial dist
 
 | Component | Candidate use | State | Decision notes |
 |---|---|---|---|
-| TinyTag | read-only audio metadata | review_required | verify exact version, license, supported formats and packaging before adding |
-| Mutagen | metadata read/write | review_required | broader functionality than MVP needs; legal and distribution review required before use |
+| TinyTag 2.2.1 | read-only audio metadata | approved_dev | MIT, pure Python, no dependencies, read-only API; supports MP3/MP2/MP1, M4A/AAC/ALAC, WAV, OGG/Opus/Vorbis, FLAC, WMA and AIFF families |
+| Mutagen | metadata read/write | review_required | broader functionality than MVP needs; do not add while read-only TinyTag satisfies the accepted scope |
 
 Product preference is the smallest read-only metadata dependency that satisfies supported formats and can be safely packaged.
 
@@ -54,7 +55,7 @@ Product preference is the smallest read-only metadata dependency that satisfies 
 | Qt commercial distribution | desktop shell | review_required | evaluate cost and licensing against business model before dependency approval |
 | pyside6-deploy / Nuitka path | packaging | review_required | run reproducible macOS and Windows packaging proof; audit transitive licenses and generated notices |
 
-No desktop dependency may be added to the main runtime dependency set in Bundle 41.
+No desktop dependency may be added to the main runtime dependency set before the desktop licensing gate.
 
 ## Export formats and interoperability
 
@@ -113,9 +114,10 @@ A dependency may move to `approved_distribution` only with a decision record con
 
 ## Immediate decisions
 
-- keep the current backend dependency set unchanged in Bundle 41,
+- use TinyTag only for read-only tagged metadata ingestion,
+- retain filename fallback as explicit degraded evidence rather than silent success,
 - use Librosa only as a baseline benchmark candidate until quality gates pass,
 - keep Essentia out of production dependencies,
-- do not start the PySide6 implementation before a desktop licensing and packaging decision,
+- do not start the desktop implementation before a desktop licensing and packaging decision,
 - implement M3U8 before proprietary ecosystem adapters,
 - prohibit unreviewed pretrained-model downloads in runtime or CI.
