@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     enable_advanced_structure: bool = False
     enable_generative_preview: bool = False
     enable_composition_comparison: bool = False
+    enable_composition_receipts: bool = False
+    composition_receipts_dir: str = "./artifacts/composition-comparisons"
 
     artifacts_dir: str = "./artifacts"
     exports_dir: str = "./exports"
