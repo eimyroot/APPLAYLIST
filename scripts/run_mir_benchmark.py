@@ -3,9 +3,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
-from core.analysis.benchmark import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.analysis.benchmark import (  # noqa: E402
     MIRBenchmarkRunner,
     load_dataset_manifest,
     write_benchmark_report,
@@ -19,7 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
             "stored, pre-licensed dataset manifest."
         )
     )
-    parser.add_argument("--manifest", required=True, help="Absolute manifest JSON path")
+    parser.add_argument(
+        "--manifest",
+        required=True,
+        help="Absolute manifest JSON path",
+    )
     parser.add_argument(
         "--dataset-root",
         required=True,
