@@ -51,6 +51,17 @@ def test_resolver_defaults_to_legacy_without_environment(monkeypatch, tmp_path) 
     assert resolve_composition_authority() == CompositionAuthorityName.LEGACY
 
 
+def test_resolver_reads_canonical_from_dotenv(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("COMPOSITION_AUTHORITY", raising=False)
+    (tmp_path / ".env").write_text(
+        "COMPOSITION_AUTHORITY=canonical\nUNRELATED_VALUE=ignored\n",
+        encoding="utf-8",
+    )
+
+    assert resolve_composition_authority() == CompositionAuthorityName.CANONICAL
+
+
 def test_default_pipeline_uses_legacy_authority(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("COMPOSITION_AUTHORITY", raising=False)
