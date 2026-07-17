@@ -1,4 +1,4 @@
-name: Desktop Host Bootstrap
+name: Desktop Host Locked Proof
 
 on:
   pull_request:
@@ -8,18 +8,22 @@ on:
       - "desktop/tauri/**"
   push:
     branches:
-      - "feature/bundle-48-tauri-host-proof"
+      - "feature/bundle-0-bootstrap"
+    paths:
+      - ".github/workflows/desktop-host-bootstrap.yml"
+      - "frontend/desktop/**"
+      - "desktop/tauri/**"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: desktop-host-bootstrap-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  group: desktop-host-locked-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   host-proof:
-    name: ${{ matrix.os }} host proof
+    name: ${{ matrix.os }} locked host proof
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     strategy:
@@ -28,11 +32,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - name: Checkout source branch
+      - name: Checkout immutable source
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
-          fetch-depth: 0
 
       - name: Install Linux desktop build dependencies
         if: runner.os == 'Linux'
@@ -52,42 +53,43 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/desktop/package-lock.json
 
       - name: Set up stable Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
-      - name: Recreate bootstrap lockfiles from pinned manifests
+      - name: Verify committed desktop inputs
         shell: bash
         run: |
           set -euo pipefail
-          rm -f frontend/desktop/package-lock.json
-          rm -f desktop/tauri/Cargo.lock
-          npm install --ignore-scripts --prefix frontend/desktop
-          cargo generate-lockfile --manifest-path desktop/tauri/Cargo.toml
-
-      - name: Materialize and validate desktop icon
-        shell: bash
-        run: |
-          set -euo pipefail
+          test -s frontend/desktop/package-lock.json
+          test -s desktop/tauri/Cargo.lock
+          test -s desktop/tauri/icons/icon.png
+          ! grep -Fxq "placeholder" frontend/desktop/package-lock.json
+          ! grep -Fxq "placeholder" desktop/tauri/Cargo.lock
           python3 - <<'PY'
           from __future__ import annotations
 
-          import base64
+          import struct
           from pathlib import Path
 
-          source = Path("desktop/tauri/icons/icon.png.base64")
-          target = Path("desktop/tauri/icons/icon.png")
-          encoded = source.read_text(encoding="ascii").strip()
-          payload = base64.b64decode(encoded, validate=True)
+          payload = Path("desktop/tauri/icons/icon.png").read_bytes()
           if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
-              raise SystemExit("desktop icon source did not decode to PNG")
+              raise SystemExit("desktop icon is not a PNG")
           if len(payload) < 1024:
               raise SystemExit("desktop icon payload is unexpectedly small")
-          target.write_bytes(payload)
+          width, height = struct.unpack(">II", payload[16:24])
+          if (width, height) != (512, 512):
+              raise SystemExit(f"desktop icon must be 512x512, got {width}x{height}")
           PY
           file desktop/tauri/icons/icon.png
+
+      - name: Install exact frontend graph
+        working-directory: frontend/desktop
+        run: npm ci --ignore-scripts
 
       - name: Frontend type and security checks
         working-directory: frontend/desktop
@@ -96,8 +98,8 @@ jobs:
           npm run security:contract
           npm run build
 
-      - name: Apply official Rust bootstrap formatting
-        run: cargo fmt --manifest-path desktop/tauri/Cargo.toml
+      - name: Rust formatting gate
+        run: cargo fmt --manifest-path desktop/tauri/Cargo.toml --check
 
       - name: Rust clippy gate
         shell: bash
@@ -115,7 +117,7 @@ jobs:
       - name: Rust unit tests
         run: cargo test --manifest-path desktop/tauri/Cargo.toml --locked
 
-      - name: Rust host compile proof
+      - name: Rust host release proof
         run: cargo build --manifest-path desktop/tauri/Cargo.toml --locked --release
 
       - name: macOS Tauri app bundle proof
@@ -131,13 +133,10 @@ jobs:
             --bundles app \
             2>&1 | tee "../../artifacts/desktop-host/tauri-bundle-macOS.log"
 
-      - name: Record toolchain and artifact evidence
+      - name: Record locked proof evidence
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/desktop-host/formatted-rust
-          cp desktop/tauri/src/lib.rs artifacts/desktop-host/formatted-rust/lib.rs
-          cp desktop/tauri/src/main.rs artifacts/desktop-host/formatted-rust/main.rs
           RUSTC_VERSION="$(rustc --version)"
           CARGO_VERSION="$(cargo --version)"
           NODE_VERSION="$(node --version)"
@@ -153,7 +152,7 @@ jobs:
           fi
           cat > "artifacts/desktop-host/evidence-${RUNNER_OS}.json" <<EOF
           {
-            "schema_version": "applaylist-desktop-host-bootstrap-v1",
+            "schema_version": "applaylist-desktop-host-locked-v1",
             "runner_os": "${RUNNER_OS}",
             "rustc": "${RUSTC_VERSION}",
             "cargo": "${CARGO_VERSION}",
@@ -161,43 +160,29 @@ jobs:
             "npm": "${NPM_VERSION}",
             "host_binary_bytes": ${HOST_BYTES},
             "app_bundle_bytes": ${APP_BYTES},
+            "dependency_graph": "locked",
             "status": "pass"
           }
           EOF
 
-      - name: Persist generated lockfiles and icon
-        if: runner.os == 'macOS' && github.event_name == 'push'
+      - name: Verify source tree remained immutable
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
+          git diff --exit-code -- \
             frontend/desktop/package-lock.json \
             desktop/tauri/Cargo.lock \
             desktop/tauri/icons/icon.png \
-            desktop/tauri/src/lib.rs \
-            desktop/tauri/src/main.rs
-          if git diff --cached --quiet; then
-            echo "No generated desktop artifacts changed"
-          else
-            git commit -m "Bundle 48B: lock desktop host dependency graph"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
+            desktop/tauri/src
 
-      - name: Upload lockfiles and host proof
+      - name: Upload locked host proof
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-host-bootstrap-${{ runner.os }}
+          name: desktop-host-locked-${{ runner.os }}
           path: |
-            frontend/desktop/package-lock.json
-            desktop/tauri/Cargo.lock
-            desktop/tauri/icons/icon.png
             desktop/tauri/target/release/applaylist-desktop
             desktop/tauri/target/release/bundle/macos/APPLAYLIST.app
-            desktop/tauri/src/lib.rs
-            desktop/tauri/src/main.rs
             artifacts/desktop-host/
           if-no-files-found: warn
           retention-days: 14
