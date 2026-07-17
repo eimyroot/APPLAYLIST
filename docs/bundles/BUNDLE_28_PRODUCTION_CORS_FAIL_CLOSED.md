@@ -25,7 +25,7 @@ The repository also tracked an unimported duplicate `api/middleware/cors 2.py`.
 - Origins are whitespace-normalized and de-duplicated while preserving order.
 - A wildcard cannot be mixed with explicit origins.
 - The production env example contains an explicit placeholder origin.
-- The redundant `cors 2.py` copy is removed.
+- Remote deletion of `cors 2.py` was blocked by the connector, so the file is neutralized to a compatibility re-export with no independent policy.
 
 ## Compatibility
 
