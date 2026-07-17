@@ -99,3 +99,7 @@ class PipelineCompositionComparisonHook:
         )
         self._sink.emit(receipt)
         return receipt
+
+    def observe(self, **kwargs) -> CompositionComparisonReceipt:
+        """Backward-compatible direct alias for callers already using observe()."""
+        return self.observe_run(**kwargs)
