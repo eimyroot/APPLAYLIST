@@ -79,6 +79,9 @@ def test_identity_hashing_uses_configured_chunk_size(
         def __exit__(self, *args):
             return self._wrapped.__exit__(*args)
 
+        def fileno(self):
+            return self._wrapped.fileno()
+
         def read(self, size: int = -1):
             read_sizes.append(size)
             return self._wrapped.read(size)
