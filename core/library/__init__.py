@@ -5,6 +5,12 @@ from core.library.contracts import (
     LibraryScanResult,
     SymlinkPolicy,
 )
+from core.library.persistence import (
+    LibraryTrackIngestionResult,
+    PersistedTrack,
+    TrackPersistenceBatchResult,
+    TrackPersistenceIssue,
+)
 from core.library.track_metadata import (
     MetadataOrigin,
     TrackIdentity,
@@ -19,11 +25,15 @@ __all__ = [
     "LibraryScanIssue",
     "LibraryScanPolicy",
     "LibraryScanResult",
+    "LibraryTrackIngestionResult",
     "MetadataOrigin",
+    "PersistedTrack",
     "SymlinkPolicy",
     "TrackIdentity",
     "TrackImportBatchResult",
     "TrackImportCandidate",
     "TrackImportIssue",
     "TrackMetadata",
+    "TrackPersistenceBatchResult",
+    "TrackPersistenceIssue",
 ]
