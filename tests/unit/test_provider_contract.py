@@ -7,7 +7,9 @@ from typing import Any
 
 import pytest
 
+import core.analysis.providers as providers_module
 from core.analysis.provider_contract import (
+    ProviderDependencyMissingError,
     ProviderOutputInvalid,
     ProviderRuntimeFailure,
     ProviderUnavailableError,
@@ -45,6 +47,26 @@ def test_normalizes_nested_provider_payload() -> None:
     assert result.duration_seconds == 367.2
     assert result.genre_hint == "tech house"
     assert result.analysis_status == "ok"
+
+
+def test_nested_values_replace_explicit_top_level_nulls() -> None:
+    result = normalize_provider_result(
+        {
+            "provider": "librosa",
+            "status": "ok",
+            "bpm": None,
+            "energy": None,
+            "genre_hint": None,
+            "beat": {"bpm": 124.0},
+            "metrics": {"energy_score": 0.45},
+            "tags": {"primary_genre_hint": "hypnotic techno"},
+        },
+        path="/tmp/demo.mp3",
+    )
+
+    assert result.bpm == 124.0
+    assert result.energy == 0.45
+    assert result.genre_hint == "hypnotic techno"
 
 
 def test_flat_key_without_confidence_is_valid() -> None:
@@ -146,6 +168,21 @@ def test_rejects_provider_identity_mismatch() -> None:
         )
 
 
+def test_preferred_missing_dependency_has_distinct_error(monkeypatch) -> None:
+    monkeypatch.setenv("APPLAYLIST_ENABLE_ESSENTIA", "1")
+    monkeypatch.setattr(
+        providers_module.importlib.util,
+        "find_spec",
+        lambda _name: None,
+    )
+
+    with pytest.raises(ProviderDependencyMissingError) as exc_info:
+        providers_module.select_best_provider("essentia")
+
+    assert exc_info.value.code == "provider_dependency_missing"
+    assert exc_info.value.provider == "essentia"
+
+
 @dataclass
 class FakeProvider:
     payload: dict[str, Any]
@@ -226,6 +263,7 @@ assert 'essentia' not in sys.modules
         check=False,
         capture_output=True,
         text=True,
+        timeout=10,
     )
 
     assert completed.returncode == 0, completed.stderr
