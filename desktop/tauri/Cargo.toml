@@ -1,0 +1,24 @@
+[package]
+name = "applaylist-desktop"
+version = "0.1.0"
+description = "APPLAYLIST Tauri host capability proof"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[lib]
+name = "applaylist_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "applaylist-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }
+tauri = { version = "=2.11.5", features = [] }
+tauri-plugin-dialog = "=2.7.1"
+uuid = { version = "=1.24.0", features = ["v4"] }
