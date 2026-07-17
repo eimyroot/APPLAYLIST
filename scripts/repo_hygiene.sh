@@ -13,5 +13,8 @@ else
   exit 127
 fi
 
+export PYTHONPYCACHEPREFIX="$ROOT/.repo-hygiene/verify-pycache"
+mkdir -p "$PYTHONPYCACHEPREFIX"
+
 cd "$ROOT"
 exec "$PYTHON" -m tools.repo_hygiene --root "$ROOT" "$@"
