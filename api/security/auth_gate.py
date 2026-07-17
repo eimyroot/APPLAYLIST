@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from hmac import compare_digest
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -55,7 +57,7 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
                 headers={"X-Request-ID": request_id},
             )
 
-        if supplied != expected:
+        if supplied is None or not compare_digest(supplied, expected):
             return JSONResponse(
                 status_code=401,
                 content={

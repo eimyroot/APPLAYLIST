@@ -62,8 +62,10 @@ class SecuritySettings:
 
     @property
     def auth_enabled(self) -> bool:
+        # Production cannot opt out of authentication. A missing key is handled
+        # by the middleware as a controlled 503 misconfiguration response.
         if self.is_production:
-            return bool(self.auth_enabled_raw or self.api_key)
+            return True
         return self.auth_enabled_raw
 
 
