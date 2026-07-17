@@ -1,8 +1,11 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = resolve(new URL("..", import.meta.url).pathname);
+const scriptDirectory = dirname(fileURLToPath(import.meta.url));
+const root = resolve(scriptDirectory, "..");
 const sourceRoot = resolve(root, "src");
+const bridgePath = resolve(sourceRoot, "desktopBridge.ts");
 
 function walk(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -17,6 +20,9 @@ function walk(directory) {
 const files = walk(sourceRoot);
 if (files.length === 0) {
   throw new Error("renderer security check found no TypeScript sources");
+}
+if (!files.includes(bridgePath)) {
+  throw new Error("renderer security check requires src/desktopBridge.ts");
 }
 
 const forbidden = [
@@ -38,21 +44,51 @@ const observedInvokeCommands = new Set();
 const violations = [];
 
 for (const file of files) {
+  const displayPath = relative(sourceRoot, file);
   const content = readFileSync(file, "utf8");
+
   for (const [label, pattern] of forbidden) {
     if (pattern.test(content)) {
-      violations.push(`${file}: forbidden ${label}`);
+      violations.push(`${displayPath}: forbidden ${label}`);
     }
   }
 
-  for (const match of content.matchAll(/invoke(?:<[^>]+>)?\(\s*["']([^"']+)["']/g)) {
-    observedInvokeCommands.add(match[1]);
-  }
-}
+  const tauriImports = [
+    ...content.matchAll(/from\s+["'](@tauri-apps\/[^"']+)["']/g),
+  ].map((match) => match[1]);
 
-for (const command of observedInvokeCommands) {
-  if (!allowedInvokeCommands.has(command)) {
-    violations.push(`renderer invokes undeclared command: ${command}`);
+  if (file !== bridgePath && tauriImports.length > 0) {
+    violations.push(`${displayPath}: Tauri imports are allowed only in desktopBridge.ts`);
+  }
+  if (
+    file === bridgePath &&
+    (tauriImports.length !== 1 || tauriImports[0] !== "@tauri-apps/api/core")
+  ) {
+    violations.push(
+      "desktopBridge.ts must have exactly one Tauri import: @tauri-apps/api/core",
+    );
+  }
+
+  const invokeCalls = [
+    ...content.matchAll(/\binvoke(?:<[^>]+>)?\s*\(/g),
+  ];
+  const literalInvokeCalls = [
+    ...content.matchAll(/\binvoke(?:<[^>]+>)?\s*\(\s*["']([^"']+)["']/g),
+  ];
+
+  if (file !== bridgePath && invokeCalls.length > 0) {
+    violations.push(`${displayPath}: invoke calls are allowed only in desktopBridge.ts`);
+  }
+  if (file === bridgePath && invokeCalls.length !== literalInvokeCalls.length) {
+    violations.push("desktopBridge.ts contains a dynamic or non-literal invoke command");
+  }
+
+  for (const match of literalInvokeCalls) {
+    const command = match[1];
+    observedInvokeCommands.add(command);
+    if (!allowedInvokeCommands.has(command)) {
+      violations.push(`renderer invokes undeclared command: ${command}`);
+    }
   }
 }
 
@@ -62,11 +98,6 @@ for (const command of allowedInvokeCommands) {
   }
 }
 
-const bridge = readFileSync(resolve(sourceRoot, "desktopBridge.ts"), "utf8");
-if (!bridge.includes('from "@tauri-apps/api/core"')) {
-  violations.push("desktopBridge.ts must use only @tauri-apps/api/core invoke");
-}
-
 if (violations.length > 0) {
   throw new Error(violations.join("\n"));
 }
@@ -74,8 +105,9 @@ if (violations.length > 0) {
 console.log(
   JSON.stringify(
     {
-      schemaVersion: "applaylist-renderer-security-v1",
+      schemaVersion: "applaylist-renderer-security-v2",
       filesChecked: files.length,
+      ipcBoundary: "src/desktopBridge.ts",
       allowedCommands: [...allowedInvokeCommands].sort(),
       status: "pass",
     },
