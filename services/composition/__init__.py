@@ -6,6 +6,11 @@ from services.composition.adapter import (
     adapt_playlist_candidates,
 )
 from services.composition.engine import DeterministicCompositionEngine
+from services.composition.export_service import (
+    CanonicalCompositionExportArtifact,
+    CanonicalCompositionExportResult,
+    CanonicalCompositionExportService,
+)
 from services.composition.hook import (
     LoggingCompositionReceiptSink,
     PipelineCompositionComparisonHook,
@@ -53,6 +58,9 @@ __all__ = [
     "CandidateIssueSeverity",
     "CanonicalCompositionExecutionRequest",
     "CanonicalCompositionExecutionResult",
+    "CanonicalCompositionExportArtifact",
+    "CanonicalCompositionExportResult",
+    "CanonicalCompositionExportService",
     "CanonicalCompositionRunner",
     "CompositeCompositionReceiptSink",
     "CompositionComparisonReceipt",
