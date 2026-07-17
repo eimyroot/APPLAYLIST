@@ -1,3 +1,10 @@
+from services.composition.adapter import (
+    CandidateAdaptationResult,
+    CandidateIssue,
+    CandidateIssueCode,
+    CandidateIssueSeverity,
+    adapt_playlist_candidates,
+)
 from services.composition.engine import DeterministicCompositionEngine
 from services.composition.models import (
     CompositionConstraints,
@@ -16,6 +23,10 @@ from services.composition.models import (
 )
 
 __all__ = [
+    "CandidateAdaptationResult",
+    "CandidateIssue",
+    "CandidateIssueCode",
+    "CandidateIssueSeverity",
     "CompositionConstraints",
     "CompositionDecision",
     "CompositionFailureReason",
@@ -30,4 +41,5 @@ __all__ = [
     "EnergyTarget",
     "TransitionReason",
     "TransitionScore",
+    "adapt_playlist_candidates",
 ]

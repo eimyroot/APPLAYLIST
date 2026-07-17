@@ -61,8 +61,7 @@ class AnalysisRepository:
                     duration_seconds=excluded.duration_seconds,
                     harmonic_ratio=excluded.harmonic_ratio,
                     percussive_ratio=excluded.percussive_ratio
-                '''
-                ,
+                ''',
                 (
                     record.track_id,
                     record.analysis_version,
@@ -95,7 +94,7 @@ class AnalysisRepository:
             return AnalysisRecord(**dict(row))
 
     def list_playlist_candidates(self) -> list[PlaylistCandidate]:
-        """Return only analyses that have a non-empty resolvable track path."""
+        """Return joined analysis and track metadata for composition adaptation."""
         self.ensure_schema()
         TrackRepository().ensure_schema()
 
@@ -107,6 +106,10 @@ class AnalysisRepository:
                     tracks.path,
                     tracks.title,
                     tracks.artist,
+                    tracks.genre,
+                    tracks.source,
+                    COALESCE(analyses.duration_seconds, tracks.duration_seconds)
+                        AS duration_seconds,
                     analyses.bpm,
                     analyses.camelot,
                     analyses.energy
