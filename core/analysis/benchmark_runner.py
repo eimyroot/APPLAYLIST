@@ -49,11 +49,24 @@ class MIRBenchmarkRunner:
         source_commit: str = "unknown",
         generated_at: str | None = None,
     ) -> BenchmarkReport:
-        root = Path(manifest.dataset_root)
+        root = Path(manifest.dataset_root).resolve(strict=True)
         rows: list[BenchmarkResultRow] = []
 
         for item in manifest.items:
-            source = (root / item.relative_path).resolve(strict=True)
+            try:
+                source = _resolve_item_source(root, item)
+            except Exception as exc:
+                rows.append(
+                    _failure_row(
+                        item,
+                        status="uncontrolled_failure",
+                        runtime_ms=0.0,
+                        error_code=f"dataset_source_invalid:{type(exc).__name__}",
+                        error_message=str(exc),
+                    )
+                )
+                continue
+
             started = self._timer()
             try:
                 result = self._analysis_service.analyze_path(
@@ -200,6 +213,17 @@ def benchmark_to_json(
         indent=2,
         ensure_ascii=False,
     )
+
+
+def _resolve_item_source(root: Path, item: BenchmarkItem) -> Path:
+    source = (root / item.relative_path).resolve(strict=True)
+    try:
+        source.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("benchmark source escaped dataset root") from exc
+    if not source.is_file():
+        raise ValueError("benchmark source must remain a regular file")
+    return source
 
 
 def _failure_row(
