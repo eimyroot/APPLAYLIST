@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from ipaddress import IPv4Network, IPv6Network, ip_network
+
+
+ProxyNetwork = IPv4Network | IPv6Network
 
 
 class SecurityConfigurationError(RuntimeError):
@@ -35,6 +39,25 @@ def _parse_origins(raw: str) -> list[str]:
     return origins
 
 
+def _parse_proxy_networks(raw: str) -> tuple[ProxyNetwork, ...]:
+    networks: list[ProxyNetwork] = []
+    seen: set[str] = set()
+
+    for item in raw.split(","):
+        value = item.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        try:
+            networks.append(ip_network(value, strict=False))
+        except ValueError as exc:
+            raise SecurityConfigurationError(
+                f"Invalid TRUSTED_PROXY_CIDRS entry: {value}"
+            ) from exc
+
+    return tuple(networks)
+
+
 @dataclass(frozen=True)
 class SecuritySettings:
     """Immutable security configuration captured from the current environment."""
@@ -49,6 +72,9 @@ class SecuritySettings:
     )
     trusted_proxy_depth: int = field(
         default_factory=lambda: _as_int(os.getenv("TRUSTED_PROXY_DEPTH"), 0)
+    )
+    trusted_proxy_cidrs_raw: str = field(
+        default_factory=lambda: os.getenv("TRUSTED_PROXY_CIDRS", "")
     )
     enable_security_headers: bool = field(
         default_factory=lambda: _as_bool(os.getenv("ENABLE_SECURITY_HEADERS"), True)
@@ -93,6 +119,20 @@ class SecuritySettings:
     @property
     def cors_allow_credentials(self) -> bool:
         return "*" not in self.allowed_origins
+
+    @property
+    def trusted_proxy_networks(self) -> tuple[ProxyNetwork, ...]:
+        if self.trusted_proxy_depth < 0:
+            raise SecurityConfigurationError(
+                "TRUSTED_PROXY_DEPTH cannot be negative"
+            )
+
+        networks = _parse_proxy_networks(self.trusted_proxy_cidrs_raw)
+        if self.trusted_proxy_depth > 0 and not networks:
+            raise SecurityConfigurationError(
+                "TRUSTED_PROXY_CIDRS is required when TRUSTED_PROXY_DEPTH is greater than zero"
+            )
+        return networks
 
     @property
     def auth_enabled(self) -> bool:
