@@ -1,0 +1,133 @@
+name: Desktop Host Bootstrap
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-host-bootstrap.yml"
+      - "frontend/desktop/**"
+      - "desktop/tauri/**"
+  push:
+    branches:
+      - "feature/bundle-48-tauri-host-proof"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-host-bootstrap-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-proof:
+    name: ${{ matrix.os }} host proof
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux desktop build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            wget
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Generate and install exact frontend graph
+        working-directory: frontend/desktop
+        run: npm install --ignore-scripts
+
+      - name: Frontend type and security checks
+        working-directory: frontend/desktop
+        run: |
+          npm run check
+          npm run security:contract
+          npm run build
+
+      - name: Generate Cargo lockfile
+        run: cargo generate-lockfile --manifest-path desktop/tauri/Cargo.toml
+
+      - name: Rust format gate
+        run: cargo fmt --manifest-path desktop/tauri/Cargo.toml -- --check
+
+      - name: Rust clippy gate
+        run: cargo clippy --manifest-path desktop/tauri/Cargo.toml --all-targets --locked -- -D warnings
+
+      - name: Rust unit tests
+        run: cargo test --manifest-path desktop/tauri/Cargo.toml --locked
+
+      - name: Rust host compile proof
+        run: cargo build --manifest-path desktop/tauri/Cargo.toml --locked --release
+
+      - name: macOS Tauri app bundle proof
+        if: runner.os == 'macOS'
+        working-directory: frontend/desktop
+        run: npm run tauri -- build --config ../../desktop/tauri/tauri.conf.json --bundles app
+
+      - name: Record toolchain and artifact evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/desktop-host
+          RUSTC_VERSION="$(rustc --version)"
+          CARGO_VERSION="$(cargo --version)"
+          NODE_VERSION="$(node --version)"
+          NPM_VERSION="$(npm --version)"
+          HOST_BINARY="desktop/tauri/target/release/applaylist-desktop"
+          test -f "$HOST_BINARY"
+          HOST_BYTES="$(wc -c < "$HOST_BINARY" | tr -d ' ')"
+          APP_BYTES=0
+          if [ "${RUNNER_OS}" = "macOS" ]; then
+            APP_PATH="desktop/tauri/target/release/bundle/macos/APPLAYLIST.app"
+            test -d "$APP_PATH"
+            APP_BYTES="$(du -sk "$APP_PATH" | awk '{print $1 * 1024}')"
+          fi
+          cat > "artifacts/desktop-host/evidence-${RUNNER_OS}.json" <<EOF
+          {
+            "schema_version": "applaylist-desktop-host-bootstrap-v1",
+            "runner_os": "${RUNNER_OS}",
+            "rustc": "${RUSTC_VERSION}",
+            "cargo": "${CARGO_VERSION}",
+            "node": "${NODE_VERSION}",
+            "npm": "${NPM_VERSION}",
+            "host_binary_bytes": ${HOST_BYTES},
+            "app_bundle_bytes": ${APP_BYTES},
+            "status": "pass"
+          }
+          EOF
+
+      - name: Upload lockfiles and host proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-host-bootstrap-${{ runner.os }}
+          path: |
+            frontend/desktop/package-lock.json
+            desktop/tauri/Cargo.lock
+            desktop/tauri/target/release/applaylist-desktop
+            desktop/tauri/target/release/bundle/macos/APPLAYLIST.app
+            artifacts/desktop-host/
+          if-no-files-found: warn
+          retention-days: 14
