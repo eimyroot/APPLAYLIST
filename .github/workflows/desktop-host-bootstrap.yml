@@ -120,8 +120,16 @@ jobs:
 
       - name: macOS Tauri app bundle proof
         if: runner.os == 'macOS'
-        working-directory: frontend/desktop
-        run: npm run tauri -- build --config ../../desktop/tauri/tauri.conf.json --bundles app
+        working-directory: desktop/tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../../artifacts/desktop-host
+          ../../frontend/desktop/node_modules/.bin/tauri \
+            build \
+            --config tauri.conf.json \
+            --bundles app \
+            2>&1 | tee "../../artifacts/desktop-host/tauri-bundle-macOS.log"
 
       - name: Record toolchain and artifact evidence
         shell: bash
