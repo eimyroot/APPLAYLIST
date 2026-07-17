@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from fastapi import APIRouter
 
+from core.config.composition_runtime import (
+    CompositionRuntimeReadiness,
+    evaluate_composition_runtime,
+)
 from core.config.settings import get_settings
 
 
-def create_health_router() -> APIRouter:
+ReadinessProvider = Callable[[], CompositionRuntimeReadiness]
+
+
+def create_health_router(
+    readiness_provider: ReadinessProvider = evaluate_composition_runtime,
+) -> APIRouter:
     router = APIRouter(tags=["health"])
 
     @router.get("/health")
@@ -17,6 +28,10 @@ def create_health_router() -> APIRouter:
             "env": settings.app_env,
             "api_version": settings.api_version,
         }
+
+    @router.get("/ready")
+    def ready() -> dict:
+        return readiness_provider().as_dict()
 
     return router
 

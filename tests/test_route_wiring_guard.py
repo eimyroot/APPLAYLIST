@@ -7,6 +7,7 @@ def test_required_routes_present() -> None:
     paths = set(app.openapi().get("paths", {}))
     required = {
         "/health",
+        "/ready",
         "/jobs/{job_type}",
         "/jobs/{job_id}",
         "/pipeline/run",
