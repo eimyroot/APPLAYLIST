@@ -6,6 +6,10 @@ from services.composition.adapter import (
     adapt_playlist_candidates,
 )
 from services.composition.engine import DeterministicCompositionEngine
+from services.composition.hook import (
+    LoggingCompositionReceiptSink,
+    PipelineCompositionComparisonHook,
+)
 from services.composition.models import (
     CompositionConstraints,
     CompositionDecision,
@@ -21,6 +25,15 @@ from services.composition.models import (
     TransitionReason,
     TransitionScore,
 )
+from services.composition.receipt import (
+    CompositionComparisonReceipt,
+    CompositionReceiptIssue,
+    build_composition_comparison_receipt,
+)
+from services.composition.receipt_sink import (
+    CompositeCompositionReceiptSink,
+    JsonCompositionReceiptSink,
+)
 from services.composition.shadow import (
     CompositionShadowReport,
     CompositionShadowService,
@@ -32,10 +45,13 @@ __all__ = [
     "CandidateIssue",
     "CandidateIssueCode",
     "CandidateIssueSeverity",
+    "CompositeCompositionReceiptSink",
+    "CompositionComparisonReceipt",
     "CompositionConstraints",
     "CompositionDecision",
     "CompositionFailureReason",
     "CompositionMode",
+    "CompositionReceiptIssue",
     "CompositionRequest",
     "CompositionResult",
     "CompositionShadowReport",
@@ -46,8 +62,12 @@ __all__ = [
     "DeterministicCompositionEngine",
     "EnergyStage",
     "EnergyTarget",
+    "JsonCompositionReceiptSink",
+    "LoggingCompositionReceiptSink",
+    "PipelineCompositionComparisonHook",
     "ShadowComparisonRequest",
     "TransitionReason",
     "TransitionScore",
     "adapt_playlist_candidates",
+    "build_composition_comparison_receipt",
 ]
