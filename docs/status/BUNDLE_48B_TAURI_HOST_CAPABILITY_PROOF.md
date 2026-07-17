@@ -4,9 +4,11 @@
 
 Implemented on an isolated feature branch. Not yet merged.
 
+The implementation and bootstrap packaging proof are complete. Final merge remains fail-closed until GitHub-hosted runners can start the committed locked workflow.
+
 ## Product Value
 
-Bundle 48B proves that a minimal React renderer can ask the Tauri host for desktop status and a native library-folder selection without receiving general host, filesystem, network or sidecar authority.
+Bundle 48B proves that a minimal React renderer can ask the Tauri host for desktop status and native library-folder selection without receiving general host, filesystem, network or sidecar authority.
 
 ## Schema Tree
 
@@ -20,7 +22,7 @@ APPLAYLIST Desktop Proof
 │
 └── Bundle 48B: Tauri host capability proof
     ├── React / TypeScript renderer
-    │   └── typed invoke-only bridge
+    │   └── desktopBridge.ts — sole typed IPC boundary
     │       ├── desktop_status
     │       └── choose_library_root
     │
@@ -29,11 +31,11 @@ APPLAYLIST Desktop Proof
         ├── native folder dialog
         ├── canonical directory validation
         ├── in-memory CapabilityRegistry
-        │   ├── cryptographically random ID
+        │   ├── random UUID v4 capability ID
         │   ├── internal canonical path
-        │   ├── lookup
-        │   └── revocation
-        └── renderer response
+        │   ├── internal lookup
+        │   └── internal revocation
+        └── sanitized renderer response
             ├── capabilityId
             └── displayName
 ```
@@ -42,7 +44,8 @@ APPLAYLIST Desktop Proof
 
 ```text
 untrusted React renderer
-  → named Tauri invoke command
+  → desktopBridge.ts
+  → literal allow-listed Tauri command
   → Rust validation and capability ownership
   → sanitized response
 ```
@@ -51,41 +54,72 @@ The real directory path never becomes part of the renderer contract.
 
 ## Security Invariants
 
-- Renderer imports only `@tauri-apps/api/core` for `invoke`.
-- Renderer cannot use direct HTTP, WebSocket or EventSource access.
+- `desktopBridge.ts` is the only renderer file allowed to import Tauri APIs or call `invoke`.
+- Every invoke command must be a literal member of the two-command allow-list.
+- Renderer cannot use direct HTTP, XMLHttpRequest, WebSocket or EventSource access.
+- Renderer cannot contain loopback addresses.
 - Renderer cannot import Tauri shell, filesystem, HTTP or dialog plugins.
 - Tauri capabilities grant only `core:default` to the `main` window.
 - The dialog plugin is called only by Rust.
 - Only existing directories can become library-root capabilities.
 - Paths are canonicalized before storage.
-- Capability IDs use random UUID v4 values and do not encode the path.
+- Capability IDs use UUID v4 values and do not encode the path.
 - Capability lookup and revocation remain internal to Rust.
 - Error text does not disclose rejected paths.
 - No sidecar URL, secret or nonce is exposed.
 - No product database, MIR, composition or export operation is activated.
 
-## Dependency Decision
+## Locked Dependency Decision
 
-Direct dependencies are exactly pinned in the frontend and Rust manifests.
+The npm and Cargo dependency graphs are committed as:
 
-The bootstrap workflow generates `package-lock.json` and `Cargo.lock` as evidence. Those exact lockfiles must be committed before the PR may leave draft state. The final workflow must then use `npm ci` and Cargo `--locked` only.
+```text
+frontend/desktop/package-lock.json
+desktop/tauri/Cargo.lock
+```
+
+The committed binary icon is:
+
+```text
+desktop/tauri/icons/icon.png
+```
+
+The final workflow is read-only and uses:
+
+```text
+npm ci --ignore-scripts
+cargo fmt --check
+cargo clippy --locked -- -D warnings
+cargo test --locked
+cargo build --locked --release
+```
+
+It cannot generate lockfiles, format source files, materialize assets or push commits.
 
 ## Proof Gates
 
 ```text
 frontend
-├── npm exact dependency graph
+├── committed npm lockfile
+├── npm ci
 ├── TypeScript strict check
-├── renderer security contract
+├── renderer security contract v2
 └── production Vite build
 
 Rust host
-├── cargo fmt
+├── committed Cargo lockfile
+├── cargo fmt --check
 ├── cargo clippy -D warnings
 ├── capability registry tests
 ├── release compile proof
 └── macOS .app bundle proof
 ```
+
+A previous bootstrap run successfully completed TypeScript, renderer security v1, clippy, Rust tests, release build and creation of `APPLAYLIST.app`. The final locked run must still execute on the exact committed head before merge.
+
+## Current External Blocker
+
+On the final committed head, Desktop Host Locked Proof, Python CI and PR Guard all failed before runner assignment and returned no steps. Public GitHub status reported Actions operational, so this is treated as a repository/account runner-start condition rather than code evidence. No required check is waived.
 
 ## Out of Scope
 
@@ -100,15 +134,16 @@ Rust host
 
 ## Acceptance
 
-- npm and Cargo lockfiles are committed and final CI uses locked modes,
+- npm and Cargo lockfiles are committed and CI uses locked modes,
 - TypeScript and Vite production build pass,
-- renderer security contract passes,
+- renderer security contract v2 passes,
 - Rust format, clippy, tests and release build pass,
 - macOS `.app` proof is generated,
 - renderer response contains no host path,
-- capability IDs are distinct, resolvable internally and revocable,
+- capability IDs are distinct, internally resolvable and revocable,
 - existing Python 3.11/3.12 regression remains green,
-- PR Guard, review-thread and mergeability gates pass.
+- PR Guard, review-thread and mergeability gates pass,
+- the final locked workflow runs successfully on the exact merge head.
 
 ## Rollback
 
