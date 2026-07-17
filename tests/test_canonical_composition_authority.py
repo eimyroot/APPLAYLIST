@@ -77,7 +77,7 @@ def test_canonical_authority_maps_command_to_export_service() -> None:
 
     outcome = authority.execute(
         PipelineCompositionCommand(
-            path="/ignored-by-canonical-runner",
+            path="/music/selected",
             limit=5,
             bpm_min=124.0,
             bpm_max=132.0,
@@ -90,6 +90,7 @@ def test_canonical_authority_maps_command_to_export_service() -> None:
     assert request.bpm_min == 124.0
     assert request.bpm_max == 132.0
     assert request.mode == "afterhours"
+    assert request.source_path == "/music/selected"
     assert outcome.run_id == "canonical-authority"
     assert [track.track_id for track in outcome.tracks] == ["canonical-1"]
     assert outcome.export["playlist_id"] == "canonical-authority"
@@ -107,6 +108,7 @@ def test_canonical_authority_uses_explicit_control_defaults() -> None:
     assert request.bpm_min == 1.0
     assert request.bpm_max == 300.0
     assert request.mode == "club"
+    assert request.source_path == "/music"
 
 
 def test_non_exportable_canonical_result_is_fail_closed() -> None:
