@@ -113,6 +113,7 @@ class CanonicalCompositionAuthority:
                 bpm_min=command.bpm_min if command.bpm_min is not None else 1.0,
                 bpm_max=command.bpm_max if command.bpm_max is not None else 300.0,
                 mode=command.mode if command.mode is not None else "club",
+                source_path=command.path,
             )
         )
         if not result.exported or result.run_id is None or result.artifact is None:
