@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -14,6 +15,7 @@ from tools.repo_hygiene_core import (
     restore_manifest,
     write_report,
 )
+from tools.repo_hygiene_verify import run_verification
 
 
 def _git(root: Path, *args: str) -> None:
@@ -152,6 +154,25 @@ def test_symlink_outside_root_is_not_followed_or_moved(tmp_path: Path) -> None:
     assert not any(candidate.path.startswith("external-cache/") for candidate in report.candidates)
 
 
+def test_cache_named_symlink_is_reported_but_never_quarantined(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    outside = tmp_path / "outside-cache"
+    outside.mkdir()
+    (outside / "protected.pyc").write_bytes(b"outside")
+    link = root / "__pycache__"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks unavailable")
+
+    candidate = _candidate(audit_repository(root), "__pycache__")
+
+    assert candidate.symlink is True
+    assert candidate.proposed_action == "report_only"
+    assert "symlinks are never moved automatically" in candidate.reason
+    assert (outside / "protected.pyc").exists()
+
+
 def test_quarantine_dry_run_apply_and_restore(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     cache = root / ".pytest_cache"
@@ -190,6 +211,25 @@ def test_reports_are_written_only_under_ignored_state_directory(tmp_path: Path) 
     assert markdown_path.read_text(encoding="utf-8").startswith(
         "# APPLAYLIST Repository Hygiene Report"
     )
+
+
+def test_verification_does_not_write_source_tree_bytecode(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    package = root / "core"
+    package.mkdir()
+    (package / "__init__.py").write_text("VALUE = 1\n", encoding="utf-8")
+    for name in ("data", "services", "tools"):
+        target = root / name
+        target.mkdir()
+        (target / "__init__.py").write_text("\n", encoding="utf-8")
+    _git(root, "add", "core", "data", "services", "tools")
+    _git(root, "commit", "-qm", "add packages")
+
+    result = run_verification(root, python_executable=sys.executable)
+
+    assert result["success"] is True
+    assert not list(root.rglob("__pycache__"))
+    assert not list(root.rglob("*.pyc"))
 
 
 def test_path_containment_rejects_escape(tmp_path: Path) -> None:
