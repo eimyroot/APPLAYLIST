@@ -3,6 +3,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from core.config.composition_authority import (
+    CompositionAuthorityName,
+    resolve_composition_authority,
+)
 from core.config.settings import get_settings
 from services.composer.composer import Composer
 from services.composition.hook import (
@@ -15,6 +19,7 @@ from services.composition.receipt_sink import (
 )
 from services.export.exporter import Exporter
 from services.orchestrator.composition_authority import (
+    CanonicalCompositionAuthority,
     LegacyCompositionAuthority,
     PipelineCompositionAuthority,
     PipelineCompositionCommand,
@@ -39,26 +44,43 @@ class OrchestratorPipeline:
         comparison_hook: object | None = None,
         comparison_enabled: bool | None = None,
     ) -> None:
-        if composition_authority is not None and any(
+        legacy_dependencies_supplied = any(
             value is not None for value in (composer, exporter, run_id_factory)
-        ):
+        )
+        if composition_authority is not None and legacy_dependencies_supplied:
             raise ValueError(
                 "composition_authority cannot be combined with legacy dependencies"
             )
 
         if composition_authority is None:
-            legacy_authority = LegacyCompositionAuthority(
-                composer=composer,
-                exporter=exporter,
-                run_id_factory=run_id_factory,
+            authority_name = (
+                CompositionAuthorityName.LEGACY
+                if legacy_dependencies_supplied
+                else resolve_composition_authority()
             )
-            self._composition_authority = legacy_authority
-            self.composer = legacy_authority.composer
-            self.exporter = legacy_authority.exporter
+            if authority_name == CompositionAuthorityName.CANONICAL:
+                self._composition_authority = CanonicalCompositionAuthority()
+                self.composer = None
+                self.exporter = None
+            else:
+                legacy_authority = LegacyCompositionAuthority(
+                    composer=composer,
+                    exporter=exporter,
+                    run_id_factory=run_id_factory,
+                )
+                self._composition_authority = legacy_authority
+                self.composer = legacy_authority.composer
+                self.exporter = legacy_authority.exporter
         else:
             self._composition_authority = composition_authority
             self.composer = None
             self.exporter = None
+
+        selected_authority_name = getattr(
+            self._composition_authority,
+            "authority_name",
+            "custom",
+        )
 
         settings = None
         if comparison_enabled is None or (
@@ -68,6 +90,11 @@ class OrchestratorPipeline:
         if comparison_enabled is None:
             assert settings is not None
             comparison_enabled = settings.enable_composition_comparison
+
+        if selected_authority_name == "canonical" and comparison_enabled:
+            raise ValueError(
+                "canonical composition authority cannot be combined with comparison observability"
+            )
 
         self._comparison_enabled = comparison_enabled
         self._comparison_hook = comparison_hook
