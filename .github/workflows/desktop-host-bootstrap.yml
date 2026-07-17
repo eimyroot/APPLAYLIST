@@ -11,25 +11,28 @@ on:
       - "feature/bundle-48-tauri-host-proof"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: desktop-host-bootstrap-${{ github.workflow }}-${{ github.ref }}
+  group: desktop-host-bootstrap-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   host-proof:
     name: ${{ matrix.os }} host proof
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - name: Checkout
+      - name: Checkout source branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Install Linux desktop build dependencies
         if: runner.os == 'Linux'
@@ -55,9 +58,36 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Generate and install exact frontend graph
-        working-directory: frontend/desktop
-        run: npm install --ignore-scripts
+      - name: Recreate bootstrap lockfiles from pinned manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f frontend/desktop/package-lock.json
+          rm -f desktop/tauri/Cargo.lock
+          npm install --ignore-scripts --prefix frontend/desktop
+          cargo generate-lockfile --manifest-path desktop/tauri/Cargo.toml
+
+      - name: Materialize and validate desktop icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import base64
+          from pathlib import Path
+
+          source = Path("desktop/tauri/icons/icon.png.base64")
+          target = Path("desktop/tauri/icons/icon.png")
+          encoded = source.read_text(encoding="ascii").strip()
+          payload = base64.b64decode(encoded, validate=True)
+          if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+              raise SystemExit("desktop icon source did not decode to PNG")
+          if len(payload) < 1024:
+              raise SystemExit("desktop icon payload is unexpectedly small")
+          target.write_bytes(payload)
+          PY
+          file desktop/tauri/icons/icon.png
 
       - name: Frontend type and security checks
         working-directory: frontend/desktop
@@ -65,9 +95,6 @@ jobs:
           npm run check
           npm run security:contract
           npm run build
-
-      - name: Generate Cargo lockfile
-        run: cargo generate-lockfile --manifest-path desktop/tauri/Cargo.toml
 
       - name: Apply official Rust bootstrap formatting
         run: cargo fmt --manifest-path desktop/tauri/Cargo.toml
@@ -130,6 +157,26 @@ jobs:
           }
           EOF
 
+      - name: Persist generated lockfiles and icon
+        if: runner.os == 'macOS' && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            frontend/desktop/package-lock.json \
+            desktop/tauri/Cargo.lock \
+            desktop/tauri/icons/icon.png \
+            desktop/tauri/src/lib.rs \
+            desktop/tauri/src/main.rs
+          if git diff --cached --quiet; then
+            echo "No generated desktop artifacts changed"
+          else
+            git commit -m "Bundle 48B: lock desktop host dependency graph"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
       - name: Upload lockfiles and host proof
         if: always()
         uses: actions/upload-artifact@v4
@@ -138,6 +185,7 @@ jobs:
           path: |
             frontend/desktop/package-lock.json
             desktop/tauri/Cargo.lock
+            desktop/tauri/icons/icon.png
             desktop/tauri/target/release/applaylist-desktop
             desktop/tauri/target/release/bundle/macos/APPLAYLIST.app
             desktop/tauri/src/lib.rs
