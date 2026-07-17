@@ -7,7 +7,14 @@ from uuid import uuid4
 
 from core.config.settings import get_settings
 from services.composer.composer import Composer
-from services.composition.hook import PipelineCompositionComparisonHook
+from services.composition.hook import (
+    LoggingCompositionReceiptSink,
+    PipelineCompositionComparisonHook,
+)
+from services.composition.receipt_sink import (
+    CompositeCompositionReceiptSink,
+    JsonCompositionReceiptSink,
+)
 from services.export.exporter import Exporter
 
 
@@ -18,6 +25,7 @@ class PipelineComparisonObserver(Protocol):
     def observe(
         self,
         *,
+        run_id: str,
         legacy_track_ids: tuple[str, ...],
         target_track_count: int,
         bpm_min: float | None,
@@ -44,12 +52,30 @@ class OrchestratorPipeline:
         self.exporter = exporter if exporter is not None else Exporter()
         self._run_id_factory = run_id_factory or _new_pipeline_run_id
 
+        settings = None
+        if comparison_enabled is None or (
+            comparison_enabled and comparison_hook is None
+        ):
+            settings = get_settings()
         if comparison_enabled is None:
-            comparison_enabled = get_settings().enable_composition_comparison
+            assert settings is not None
+            comparison_enabled = settings.enable_composition_comparison
+
         self._comparison_enabled = comparison_enabled
         self._comparison_hook = comparison_hook
         if self._comparison_enabled and self._comparison_hook is None:
-            self._comparison_hook = PipelineCompositionComparisonHook()
+            assert settings is not None
+            receipt_sinks: list[object] = [LoggingCompositionReceiptSink()]
+            if settings.enable_composition_receipts:
+                receipt_sinks.append(
+                    JsonCompositionReceiptSink(settings.composition_receipts_dir)
+                )
+            sink = (
+                receipt_sinks[0]
+                if len(receipt_sinks) == 1
+                else CompositeCompositionReceiptSink(tuple(receipt_sinks))
+            )
+            self._comparison_hook = PipelineCompositionComparisonHook(sink=sink)
 
     def run(
         self,
@@ -66,13 +92,15 @@ class OrchestratorPipeline:
 
         if not isinstance(playlist_id, str) or not playlist_id.strip():
             raise RuntimeError("Pipeline run ID factory returned an invalid identifier")
+        normalized_playlist_id = playlist_id.strip()
 
         export = self.exporter.export_m3u(
-            playlist_id=playlist_id.strip(),
+            playlist_id=normalized_playlist_id,
             tracks=playlist,
         )
 
         self._observe_composition(
+            run_id=normalized_playlist_id,
             playlist=playlist,
             limit=limit,
             bpm_min=bpm_min,
@@ -96,6 +124,7 @@ class OrchestratorPipeline:
     def _observe_composition(
         self,
         *,
+        run_id: str,
         playlist: list,
         limit: int,
         bpm_min: float | None,
@@ -107,6 +136,7 @@ class OrchestratorPipeline:
 
         try:
             self._comparison_hook.observe(
+                run_id=run_id,
                 legacy_track_ids=tuple(track.track_id for track in playlist),
                 target_track_count=limit,
                 bpm_min=bpm_min,
