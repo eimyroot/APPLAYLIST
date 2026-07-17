@@ -18,6 +18,10 @@ DEFAULT_AUDIO_EXTENSIONS = (
 )
 
 
+def _text_sort_key(value: str) -> tuple[str, str]:
+    return value.casefold(), value
+
+
 class SymlinkPolicy(str, Enum):
     SKIP = "skip"
     ALLOW_WITHIN_ROOT = "allow_within_root"
@@ -113,8 +117,7 @@ class LibraryScanResult:
             raise ValueError("accepted paths must be absolute")
         if len(set(self.accepted_paths)) != len(self.accepted_paths):
             raise ValueError("accepted paths must be unique")
-        sort_key = lambda value: (value.casefold(), value)
-        if tuple(sorted(self.accepted_paths, key=sort_key)) != self.accepted_paths:
+        if tuple(sorted(self.accepted_paths, key=_text_sort_key)) != self.accepted_paths:
             raise ValueError("accepted paths must be deterministically sorted")
         for value, name in (
             (self.cancelled, "cancelled"),
