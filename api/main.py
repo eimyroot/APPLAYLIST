@@ -17,23 +17,32 @@ from api.routes.jobs import router as jobs_router
 from api.routes.pipeline import router as pipeline_router
 from api.security.auth_gate import ApiKeyAuthMiddleware
 from api.security.bootstrap import apply_security_hardening
+from api.security.settings import SecuritySettings
 
-configure_observability()
 
-app = FastAPI(
-    title="APPLAYLIST API",
-    version="0.13.1",
-)
+def create_app(security_settings: SecuritySettings | None = None) -> FastAPI:
+    """Build an isolated APPLAYLIST application instance."""
+    config = security_settings or SecuritySettings()
+    configure_observability()
 
-apply_security_hardening(app)
-app.add_middleware(RequestContextMiddleware)
-app.add_middleware(ApiKeyAuthMiddleware)
-app.middleware("http")(log_request_response)
+    application = FastAPI(
+        title="APPLAYLIST API",
+        version="0.13.1",
+    )
 
-app.include_router(health_router)
-app.include_router(jobs_router)
-app.include_router(pipeline_router)
+    apply_security_hardening(application, config)
+    application.add_middleware(RequestContextMiddleware)
+    application.add_middleware(ApiKeyAuthMiddleware, security_settings=config)
+    application.middleware("http")(log_request_response)
 
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(Exception, unhandled_exception_handler)
+    application.include_router(health_router)
+    application.include_router(jobs_router)
+    application.include_router(pipeline_router)
+
+    application.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    application.add_exception_handler(RequestValidationError, validation_exception_handler)
+    application.add_exception_handler(Exception, unhandled_exception_handler)
+    return application
+
+
+app = create_app()
