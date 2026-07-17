@@ -4,90 +4,111 @@ APPLAYLIST is a local-first DJ preparation product that turns a selected local m
 
 ```text
 select local library
--> import and analyze tracks
--> build a constrained set
--> inspect and edit transitions
--> export to an existing DJ workflow
+→ import and analyze tracks
+→ build an explainable constrained set
+→ inspect and edit transitions
+→ export to an existing DJ workflow
 ```
 
 ## Current status
 
 - Canonical repository: `nulleimy/APPLAYLIST`
 - Canonical branch: `feature/bundle-0-bootstrap`
-- Current runtime checkpoint: **Bundle 40 — Composition Startup Readiness Gate**
-- Product baseline: **Bundle 41 — Product Baseline Realignment**
+- Current merged checkpoint: **Bundle 46 — MIR Benchmark Harness**
+- Active architecture slice: **Bundle 47 — Desktop Shell Architecture and Security ADR**
 - Supported Python: `>=3.11,<3.13`
 - Release status: **not yet product-ready**
 - Default composition authority remains `legacy`
-- Canonical composition is available behind controlled configuration
-- `/ready` validates the selected composition runtime configuration
-- Legacy analysis remains active while the real baseline provider and benchmark are pending
+- Canonical composition remains available behind controlled configuration
+- Real local Librosa MIR exists as a benchmark candidate
+- Production provider authority remains blocked on licensed benchmark and human review evidence
 
-The repository has strong provider, composition, export, readiness and security foundations. The next work is intentionally product-first: library import, real analysis evidence, benchmark validation, desktop workflow, manual editing and M3U8 release.
+The repository now contains the library scanner, stable content identity, tagged metadata persistence, a real baseline MIR provider, a fail-closed benchmark harness, composition/export foundations and repository hygiene tooling.
 
-## Product baseline
-
-- [Product Definition v1](docs/product/APPLAYLIST_PRODUCT_DEFINITION_V1.md)
-- [Target Architecture v1](docs/architecture/APPLAYLIST_TARGET_ARCHITECTURE_V1.md)
-- [MIR Benchmark Specification v1](docs/quality/APPLAYLIST_MIR_BENCHMARK_SPEC_V1.md)
-- [License Decision Register v1](docs/compliance/APPLAYLIST_LICENSE_DECISION_REGISTER_V1.md)
-- [Product Roadmap — Bundles 41–51](docs/roadmap/APPLAYLIST_PRODUCT_ROADMAP_41_51.md)
+The next implementation target is a secure packaged desktop proof, not additional infrastructure abstraction.
 
 ## Product objective
 
 The first release must let a DJ:
 
-1. select one explicit local audio folder,
-2. import supported files with stable identity and metadata,
-3. analyze BPM, key/Camelot, energy and duration using a real provider,
-4. inspect confidence, warnings and failures,
-5. create a deterministic set under explicit musical constraints,
-6. manually reorder, lock, replace and regenerate tracks,
-7. export an approved playlist as path-valid M3U8.
+1. install and open a signed local desktop application,
+2. select one explicit local audio folder,
+3. import supported files with stable identity and metadata,
+4. analyze BPM, key/Camelot, energy and duration using a real local provider,
+5. inspect confidence, warnings and failures,
+6. create a deterministic explainable set under explicit musical constraints,
+7. manually reorder, lock, replace and regenerate tracks,
+8. export an approved playlist as path-valid UTF-8 M3U8.
 
-## Architecture
+## Canonical product documents
+
+- [Product Definition v1](docs/product/APPLAYLIST_PRODUCT_DEFINITION_V1.md)
+- [Target Architecture v2](docs/architecture/APPLAYLIST_TARGET_ARCHITECTURE_V2.md)
+- [Desktop Shell ADR](docs/architecture/ADR_BUNDLE_47_DESKTOP_SHELL.md)
+- [Desktop Security Contract v1](docs/architecture/APPLAYLIST_DESKTOP_SECURITY_CONTRACT_V1.md)
+- [MIR Benchmark Specification v1](docs/quality/APPLAYLIST_MIR_BENCHMARK_SPEC_V1.md)
+- [License Decision Register v1](docs/compliance/APPLAYLIST_LICENSE_DECISION_REGISTER_V1.md)
+- [Product Roadmap — Bundles 41–54](docs/roadmap/APPLAYLIST_PRODUCT_ROADMAP_41_54.md)
+
+## Target runtime architecture
 
 ```text
-Desktop UI / FastAPI
-        |
-Application services
-        |
-+-------+--------------------+
-|                            |
-Provider boundary       Repository boundary
-metadata/audio          tracks/analyses/playlists/jobs
-        |                            |
-        +------> normalized domain <-+
-                         |
-                composition and export
+React / TypeScript renderer
+        │ typed Tauri commands and events
+        ▼
+Tauri Rust desktop core
+        │ capabilities, native dialogs, sidecar lifecycle, updates
+        ▼
+Authenticated loopback Python sidecar
+        │ FastAPI transport → application services
+        ▼
+Library / analysis / composition / playlist / export
+        │
+        ├── provider boundary
+        └── repository boundary
 ```
 
-Component boundaries:
+Desktop decision:
 
-- `api/` — HTTP routes, middleware and transport validation
-- `core/` — domain contracts, configuration, provider registry and pure rules
-- `services/` — application orchestration, analysis, composition and export
-- `data/` — models, repositories and persistence
-- `workers/` — asynchronous processing foundation
-- `tests/` — unit, integration and regression tests
-- `docs/` — product, architecture, rollout, quality and operations
+- primary: **Tauri 2 + React/TypeScript + packaged Python sidecar**,
+- fallback: **Electron + React/TypeScript + packaged Python sidecar** only if the Tauri proof fails accepted gates,
+- not selected under the current shared-web direction: **PySide6/QML**.
+
+The React renderer never receives arbitrary shell access, unrestricted filesystem authority, the Python sidecar credential or direct SQLite access.
+
+## Component boundaries
+
+- `api/` — HTTP schemas/routes and transport validation
+- `core/` — domain contracts, configuration, provider registry, benchmark and pure rules
+- `services/` — application orchestration, library, analysis, composition and export
+- `data/` — models, repositories, migrations and persistence
+- `workers/` — typed background-processing foundation
+- `frontend/` — future React product UI; starts only in Bundle 48 proof
+- `desktop/` — future Tauri core and packaged sidecar supervision; starts only in Bundle 48 proof
+- `scripts/` — safe operator and verification commands
+- `tests/` — unit, integration, security and regression evidence
+- `docs/` — product, architecture, security, quality, compliance and operations
 
 ## Non-negotiable engineering rules
 
-1. Do not run tests with global Python.
-2. Use `.venv/bin/python`.
-3. Do not use Python 3.14 for this project yet.
-4. Do not commit `.env`, `.venv`, databases, caches or macOS/iCloud duplicate files.
-5. Optional audio backends must not import on the mandatory API boot path.
+1. Do not run project tests with global Python.
+2. Use the project virtual environment.
+3. Do not use Python 3.14 for the product runtime yet.
+4. Do not commit `.env`, virtual environments, databases, caches, benchmark audio or duplicate cloud-sync files.
+5. Optional audio backends must not import on mandatory boot.
 6. Providers never persist directly.
-7. Only normalized and validated analysis records may be stored.
-8. API routes must not contain heavy audio or product use-case logic.
+7. Only normalized validated analysis records may be stored.
+8. Routes and renderer code never own heavy product logic.
 9. Repositories own persistence.
-10. Tests and product acceptance gates must pass before every checkpoint.
+10. Tests and product acceptance gates pass before every checkpoint.
 11. New abstractions require a named product need.
 12. Default-provider or authority changes require benchmark and rollback evidence.
+13. Renderer code never receives generic shell or filesystem APIs.
+14. Packaged sidecar binds loopback only and uses per-session authentication.
+15. Desktop update artifacts are signed and private signing keys remain outside the repository.
+16. Every bundle includes a schema tree and explicit out-of-scope list.
 
-## Local development
+## Local Python development
 
 ```bash
 cd /path/to/APPLAYLIST
@@ -107,28 +128,55 @@ cd /path/to/APPLAYLIST
 .venv/bin/python -m pytest -q
 ```
 
-Release gates:
+Repository hygiene:
 
-- CI passes on Python 3.11 and 3.12,
-- mandatory boot does not require an optional audio backend,
-- provider output is normalized and validated before storage,
-- no fake success or hidden provider fallback,
-- API contract changes have an explicit migration plan,
-- exported playlist paths exist,
-- product-facing slices demonstrate their user-visible acceptance result.
+```bash
+make hygiene-audit
+make hygiene-plan
+make hygiene-verify
+```
+
+MIR benchmark against an externally stored licensed dataset:
+
+```bash
+.venv/bin/python scripts/run_mir_benchmark.py \
+  --manifest /absolute/path/manifest.json \
+  --dataset-root /absolute/path/dataset \
+  --output /absolute/path/artifacts/report.json \
+  --provider librosa \
+  --source-commit "$(git rev-parse HEAD)"
+```
+
+No benchmark audio or restricted annotations belong in the repository.
 
 ## Product-first implementation order
 
-1. Bundle 41 — Product Baseline Realignment
-2. Bundle 42 — Library Import Boundary
-3. Bundle 43 — Metadata and Stable Track Identity
-4. Bundle 44 — Analysis Job Contract
-5. Bundle 45 — Real Baseline Audio Provider
-6. Bundle 46 — MIR Benchmark Harness
-7. Bundle 47 — Desktop Library Shell
-8. Bundle 48 — Analysis Inspector
-9. Bundle 49 — Set Builder
-10. Bundle 50 — Manual Playlist Editor
-11. Bundle 51 — M3U8 End-to-End Release Slice
+1. Bundle 41 — Product Baseline Realignment ✅
+2. Bundle 42 — Bounded Library Import ✅
+3. Bundle 43 — Stable Track Identity and Metadata Boundary ✅
+4. Bundle 44 — Tagged Metadata and Persistence ✅
+5. Bundle 45 — Baseline Librosa MIR Provider ✅
+6. Bundle 46 — MIR Benchmark Harness ✅
+7. Bundle 47 — Desktop Shell Architecture and Security ADR
+8. Bundle 48 — Tauri/Python Sidecar Proof
+9. Bundle 49 — Desktop Library Shell
+10. Bundle 50 — Analysis Job and Inspector
+11. Bundle 51 — Transition Intelligence v1
+12. Bundle 52 — Explainable Set Builder
+13. Bundle 53 — Manual Playlist Editor
+14. Bundle 54 — M3U8 End-to-End Release Slice
 
-Until Bundle 51, do not prioritize cloud accounts, streaming integration, live mixing, stems, mobile clients, proprietary database reverse engineering or additional generalized composition infrastructure.
+Until Bundle 54, do not prioritize cloud accounts, streaming integrations, popularity/trend scoring, live mixing, stems, mobile clients, proprietary database reverse engineering, generative AI chat as the primary product surface or additional generalized composition infrastructure.
+
+## Release gates
+
+- Python CI passes on 3.11 and 3.12.
+- Frontend/Rust CI is added when Bundle 48 introduces those toolchains.
+- Mandatory boot does not require optional audio dependencies.
+- Provider output is normalized and validated before storage.
+- No fake success or hidden provider fallback.
+- Desktop renderer has no generic host authority.
+- Packaged artifacts pass layout and clean-machine smoke tests.
+- Sidecar lifecycle, authentication and shutdown are proven.
+- Signing, notarization, updater and SBOM evidence exist before external release.
+- Product-facing slices demonstrate the declared user outcome; a green test count alone is not sufficient.
