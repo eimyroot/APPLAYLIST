@@ -21,6 +21,11 @@ from services.composition.models import (
     TransitionReason,
     TransitionScore,
 )
+from services.composition.shadow import (
+    CompositionShadowReport,
+    CompositionShadowService,
+    ShadowComparisonRequest,
+)
 
 __all__ = [
     "CandidateAdaptationResult",
@@ -33,12 +38,15 @@ __all__ = [
     "CompositionMode",
     "CompositionRequest",
     "CompositionResult",
+    "CompositionShadowReport",
+    "CompositionShadowService",
     "CompositionStatus",
     "CompositionSummary",
     "CompositionTrack",
     "DeterministicCompositionEngine",
     "EnergyStage",
     "EnergyTarget",
+    "ShadowComparisonRequest",
     "TransitionReason",
     "TransitionScore",
     "adapt_playlist_candidates",
