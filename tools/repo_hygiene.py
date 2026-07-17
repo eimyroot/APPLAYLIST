@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 from tools.repo_hygiene_core import (
@@ -94,14 +95,14 @@ def main(argv: list[str] | None = None) -> int:
         if command == "audit":
             report = audit_repository(
                 root,
-                include_generated=args.include_generated,
-                include_heavy=args.include_heavy,
+                include_generated=getattr(args, "include_generated", False),
+                include_heavy=getattr(args, "include_heavy", False),
             )
             json_path, markdown_path = write_report(root, report, label="audit")
             print(f"JSON_REPORT={json_path}")
             print(f"MARKDOWN_REPORT={markdown_path}")
             print(json.dumps(report.summary(), sort_keys=True))
-            if args.stdout:
+            if getattr(args, "stdout", False):
                 print()
                 print(report_markdown(report))
             return 0
