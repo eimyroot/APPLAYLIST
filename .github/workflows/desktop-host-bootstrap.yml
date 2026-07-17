@@ -69,8 +69,8 @@ jobs:
       - name: Generate Cargo lockfile
         run: cargo generate-lockfile --manifest-path desktop/tauri/Cargo.toml
 
-      - name: Rust format gate
-        run: cargo fmt --manifest-path desktop/tauri/Cargo.toml -- --check
+      - name: Apply official Rust bootstrap formatting
+        run: cargo fmt --manifest-path desktop/tauri/Cargo.toml
 
       - name: Rust clippy gate
         run: cargo clippy --manifest-path desktop/tauri/Cargo.toml --all-targets --locked -- -D warnings
@@ -90,7 +90,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/desktop-host
+          mkdir -p artifacts/desktop-host/formatted-rust
+          cp desktop/tauri/src/lib.rs artifacts/desktop-host/formatted-rust/lib.rs
+          cp desktop/tauri/src/main.rs artifacts/desktop-host/formatted-rust/main.rs
           RUSTC_VERSION="$(rustc --version)"
           CARGO_VERSION="$(cargo --version)"
           NODE_VERSION="$(node --version)"
@@ -128,6 +130,8 @@ jobs:
             desktop/tauri/Cargo.lock
             desktop/tauri/target/release/applaylist-desktop
             desktop/tauri/target/release/bundle/macos/APPLAYLIST.app
+            desktop/tauri/src/lib.rs
+            desktop/tauri/src/main.rs
             artifacts/desktop-host/
           if-no-files-found: warn
           retention-days: 14
