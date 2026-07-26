@@ -133,4 +133,3 @@ def get_provider_metadata(provider_names=None):
             )
 
     return metadata
-
