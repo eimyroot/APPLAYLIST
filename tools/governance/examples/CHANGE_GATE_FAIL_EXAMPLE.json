@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "change_id": "WB-0002",
+  "title": "Example dishonest maximum",
+  "truth_status": "VERIFIED",
+  "lifecycle_status": "VERIFIED",
+  "risk_tier": "T2",
+  "context_domain": "COMPLICATED",
+  "quality_dimensions": {
+    "simple": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["EVD-0002#scope"]},
+    "purposeful": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["PB-0002#outcome"]},
+    "automated": {"target": 10, "status": "UNKNOWN", "score": null, "evidence": []},
+    "secure": {"target": 10, "status": "FAILED", "score": 4, "evidence": ["EVD-0002#security-failure"]},
+    "measurable": {"target": 10, "status": "UNKNOWN", "score": null, "evidence": []},
+    "reversible": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["EVD-0002#rollback"]},
+    "provable": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["EVD-0002#receipt"]}
+  },
+  "gate_result": "VERIFIED_10_OF_10",
+  "remaining_unknowns": ["Automation coverage", "Outcome baseline"]
+}

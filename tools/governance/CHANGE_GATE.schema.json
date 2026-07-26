@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://applaylist.local/schemas/change-gate-v1.json",
+  "title": "APPLAYLIST 7Q Change Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "change_id",
+    "title",
+    "truth_status",
+    "lifecycle_status",
+    "risk_tier",
+    "context_domain",
+    "quality_dimensions",
+    "gate_result",
+    "remaining_unknowns"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "change_id": {"type": "string", "pattern": "^[A-Z]+-[0-9A-Z-]+$"},
+    "title": {"type": "string", "minLength": 3},
+    "truth_status": {
+      "enum": ["VERIFIED", "IMPLEMENTED", "PROPOSED", "INFERRED", "UNKNOWN", "BLOCKED"]
+    },
+    "lifecycle_status": {
+      "enum": [
+        "DISCOVERED", "INVESTIGATING", "SHAPED", "PROPOSED", "ACCEPTED",
+        "PLANNED", "IMPLEMENTING", "IMPLEMENTED", "VERIFIED", "RELEASED",
+        "VALIDATED", "DEPRECATED", "RETIRED"
+      ]
+    },
+    "risk_tier": {"enum": ["T0", "T1", "T2", "T3"]},
+    "context_domain": {"enum": ["CLEAR", "COMPLICATED", "COMPLEX", "CHAOTIC", "CONFUSED"]},
+    "quality_dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["simple", "purposeful", "automated", "secure", "measurable", "reversible", "provable"],
+      "properties": {
+        "simple": {"$ref": "#/$defs/dimension"},
+        "purposeful": {"$ref": "#/$defs/dimension"},
+        "automated": {"$ref": "#/$defs/dimension"},
+        "secure": {"$ref": "#/$defs/dimension"},
+        "measurable": {"$ref": "#/$defs/dimension"},
+        "reversible": {"$ref": "#/$defs/dimension"},
+        "provable": {"$ref": "#/$defs/dimension"}
+      }
+    },
+    "gate_result": {"enum": ["VERIFIED_10_OF_10", "PARTIALLY_VERIFIED", "BLOCKED"]},
+    "remaining_unknowns": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "decision_reference": {"type": "string"},
+    "work_block_reference": {"type": "string"},
+    "source_revision": {"type": "string"},
+    "artifact_digests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subject", "algorithm", "digest"],
+        "properties": {
+          "subject": {"type": "string", "minLength": 1},
+          "algorithm": {"const": "sha256"},
+          "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "status", "score", "evidence"],
+      "properties": {
+        "target": {"const": 10},
+        "status": {
+          "enum": ["VERIFIED_PASS", "FAILED", "UNKNOWN", "NOT_APPLICABLE_APPROVED"]
+        },
+        "score": {"type": ["integer", "null"], "minimum": 0, "maximum": 10},
+        "evidence": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "rationale": {"type": "string"},
+        "approved_by": {"type": "string"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "VERIFIED_PASS"}}, "required": ["status"]},
+          "then": {
+            "properties": {
+              "score": {"const": 10},
+              "evidence": {"minItems": 1}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "NOT_APPLICABLE_APPROVED"}}, "required": ["status"]},
+          "then": {
+            "required": ["rationale", "approved_by"],
+            "properties": {
+              "score": {"type": "null"},
+              "rationale": {"minLength": 8},
+              "approved_by": {"minLength": 2}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"enum": ["FAILED", "UNKNOWN"]}}, "required": ["status"]},
+          "then": {
+            "properties": {
+              "score": {"type": ["integer", "null"], "maximum": 9}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

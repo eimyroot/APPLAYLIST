@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "change_id": "WB-000G",
+  "title": "Adopt governance V2.1 for pilot operation",
+  "truth_status": "IMPLEMENTED",
+  "lifecycle_status": "ACCEPTED",
+  "risk_tier": "T1",
+  "context_domain": "COMPLICATED",
+  "decision_reference": "GOVERNANCE-ADOPTION-2026-07-26",
+  "work_block_reference": "WB-000G",
+  "source_revision": "bf8c2e6910e30654b6804376b8d93bcc465b1281",
+  "quality_dimensions": {
+    "simple": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["WB-000G#exact-governance-scope"]},
+    "purposeful": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["GOVERNANCE-ADOPTION-2026-07-26#owner-decision"]},
+    "automated": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["WB-000G#stdlib-validator-self-tests"]},
+    "secure": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["WB-000G#fail-closed-installation"]},
+    "measurable": {"target": 10, "status": "UNKNOWN", "score": null, "evidence": [], "rationale": "Operational impact requires three real pilot Work Blocks."},
+    "reversible": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["WB-000G#backup-bundle-and-revert"]},
+    "provable": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["WB-000G#sha256-manifest-and-commit"]}
+  },
+  "gate_result": "PARTIALLY_VERIFIED",
+  "remaining_unknowns": [
+    "Cognitive load across three real Work Blocks",
+    "Measured effect on lead time and rework"
+  ],
+  "artifact_digests": []
+}

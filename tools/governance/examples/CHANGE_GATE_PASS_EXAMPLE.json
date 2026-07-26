@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "change_id": "WB-0001",
+  "title": "Example verified change",
+  "truth_status": "VERIFIED",
+  "lifecycle_status": "VERIFIED",
+  "risk_tier": "T1",
+  "context_domain": "CLEAR",
+  "decision_reference": "DEC-0001",
+  "work_block_reference": "WB-0001",
+  "source_revision": "0123456789abcdef0123456789abcdef01234567",
+  "quality_dimensions": {
+    "simple": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["EVD-0001#scope-diff"]},
+    "purposeful": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["PB-0001#problem-outcome"]},
+    "automated": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["EVD-0001#automated-gate"]},
+    "secure": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["EVD-0001#security-review"]},
+    "measurable": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["PB-0001#baseline-target-guardrail"]},
+    "reversible": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["EVD-0001#rollback-test"]},
+    "provable": {"target": 10, "status": "VERIFIED_PASS", "score": 10, "evidence": ["EVD-0001#receipt-digests"]}
+  },
+  "gate_result": "VERIFIED_10_OF_10",
+  "remaining_unknowns": [],
+  "artifact_digests": [
+    {
+      "subject": "example-artifact.tar.gz",
+      "algorithm": "sha256",
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}
