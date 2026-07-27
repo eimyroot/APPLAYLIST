@@ -1,6 +1,6 @@
+from core.energy_curve import target_energy
 from data.repositories.analysis_repository import AnalysisRepository
 from services.composer.scoring import score_transition
-from core.energy_curve import target_energy
 
 
 class Composer:
@@ -43,9 +43,9 @@ class Composer:
         return playlist
 
     def _load_tracks(self):
-        import sqlite3
         from data.connection import get_sqlite_connection
 
+        AnalysisRepository().ensure_schema()
         with get_sqlite_connection() as conn:
             rows = conn.execute("SELECT * FROM analyses").fetchall()
 
