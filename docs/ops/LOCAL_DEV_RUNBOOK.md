@@ -30,33 +30,29 @@ git remote -v
 git log -5 --oneline
 ```
 
-## Python
+## Python and deterministic environment
 
 Supported project policy: Python `>=3.11,<3.13`.
 
-Until EPIC-002 provides a fully deterministic environment command, use an explicitly selected
-virtual environment and verify its interpreter:
+Create the canonical local environment from the committed hash-locked dependency graph:
 
 ```bash
-.venv/bin/python --version
+make bootstrap PYTHON_BOOTSTRAP=python3.12
 ```
 
-Example recreation for the existing audio constraint baseline:
+Then use the project-owned commands:
 
 ```bash
-python3.11 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip setuptools wheel
-.venv/bin/python -m pip install -e ".[dev]" -c constraints/audio-stack-py311.txt
+make doctor
+make lint
+make type
+make test
+make security
+make verify
+make bundle
 ```
 
-## Tests
-
-```bash
-.venv/bin/python -m pytest -q
-```
-
-Do not hard-code a passing test count into this runbook. The exact count belongs in the evidence
-receipt for the verified commit.
+The exact test count belongs in the evidence receipt for the verified commit, not in this runbook.
 
 ## Local API
 
@@ -84,5 +80,4 @@ git diff --check
 git status --short --branch
 ```
 
-EPIC-002 is responsible for replacing this transitional runbook flow with the canonical
-`make doctor / lint / test / verify / bundle` gate.
+See `LOCAL_GATE_RUNBOOK.md` for gate semantics and debt-baseline rules.

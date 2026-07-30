@@ -1,0 +1,18 @@
+# APPLAYLIST WB002 non-audio direct dependency baseline.
+#
+# Purpose:
+# - make lock regeneration inputs explicit instead of depending on ambient PATH state;
+# - preserve the direct versions from the last verified Python 3.12 environment;
+# - leave the audio stack authoritative in constraints/audio-stack-py311.txt.
+#
+# Update only in an isolated dependency work block with full regression evidence.
+
+fastapi==0.139.2
+uvicorn==0.51.0
+pytest==8.4.2
+httpx==0.28.1
+
+# Packaging / lock-generation bootstrap.
+pip==26.1.2
+setuptools==83.0.0
+wheel==0.47.0

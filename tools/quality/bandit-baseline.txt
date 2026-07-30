@@ -1,0 +1,6 @@
+core/config/settings.py:11:B104:MEDIUM:MEDIUM
+services/integrations/spotify_client.py:13:B311:LOW:HIGH
+services/integrations/spotify_client.py:14:B311:LOW:HIGH
+services/integrations/spotify_client.py:15:B311:LOW:HIGH
+services/integrations/spotify_client.py:16:B311:LOW:HIGH
+services/integrations/spotify_client.py:17:B311:LOW:HIGH

@@ -21,7 +21,7 @@ current planning authority.
 | --- | --- | --- |
 | EPIC-000 | Repository rescue and consolidation | VERIFIED CLOSED |
 | EPIC-001 | Foundation and documentation freeze | VERIFIED CLOSED |
-| EPIC-002 | Reproducible local engineering baseline | NEXT / OPEN |
+| EPIC-002 | Reproducible local engineering baseline | VERIFIED CLOSED |
 | EPIC-003 | Canonical analysis contracts | PARTIAL — fallback contract drift remains |
 | EPIC-004 | Provider framework and real extraction | PARTIAL / implemented building blocks |
 | EPIC-005 | Transition Intelligence foundation | IMPLEMENTED / runtime activation NONE |

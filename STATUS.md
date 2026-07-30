@@ -27,7 +27,7 @@ related:
 
 - EPIC-000 repository rescue: **VERIFIED CLOSED**;
 - EPIC-001 documentation truth: **VERIFIED CLOSED**;
-- EPIC-002 reproducible local engineering baseline: **OPEN / NEXT**.
+- EPIC-002 reproducible local engineering baseline: **VERIFIED CLOSED**.
 
 ## Current runtime authority
 
@@ -49,7 +49,7 @@ related:
 
 ## Known open debt
 
-- EPIC-002 deterministic environment/local quality gate is not closed;
+- quality/type/security debt is explicitly frozen by differential baselines; baseline growth is forbidden;
 - EPIC-003 contains fallback analysis-contract drift;
 - repository-wide Ruff debt remains;
 - source identity is not yet persisted in the current analysis record schema;

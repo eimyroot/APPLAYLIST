@@ -39,21 +39,24 @@ Canonical working directory:
 cd "/Users/eimyna/00_DEV/APPLAYLIST"
 ```
 
-Until EPIC-002 closes the deterministic engineering baseline, verify the interpreter explicitly.
-A supported baseline is Python 3.11 or 3.12.
+The local engineering baseline is controlled by the committed hash-locked dependency graph.
 
-Example setup:
+Bootstrap a supported Python 3.11/3.12 environment:
 
 ```bash
-python3.11 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip setuptools wheel
-.venv/bin/python -m pip install -e ".[dev]" -c constraints/audio-stack-py311.txt
+make bootstrap PYTHON_BOOTSTRAP=python3.12
 ```
 
-Run tests:
+Run the canonical local gate:
 
 ```bash
-.venv/bin/python -m pytest -q
+make doctor
+make lint
+make type
+make test
+make security
+make verify
+make bundle
 ```
 
 Run the API locally:
@@ -68,8 +71,7 @@ Health endpoint:
 GET /health
 ```
 
-EPIC-002 will replace ad-hoc local commands with the canonical
-`make doctor / lint / test / verify / bundle` interface.
+See `docs/ops/LOCAL_GATE_RUNBOOK.md` for the canonical local gate and explicit debt-baseline policy.
 
 ## Security and privacy
 
