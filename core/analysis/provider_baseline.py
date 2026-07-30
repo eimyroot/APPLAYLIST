@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from core.analysis.contracts import CanonicalAnalysisResult
 from core.analysis.provider_contracts import (
     ProviderAvailability,
     ProviderInput,
@@ -43,6 +42,9 @@ class BaselineAnalysisProvider:
     def analyze(self, provider_input: ProviderInput) -> ProviderOutput:
         try:
             from services.analysis.analyzer import AudioAnalyzer
+            from services.analysis.canonical_projection import (
+                project_analysis_record_to_canonical,
+            )
 
             record = AudioAnalyzer().analyze_file(
                 track_id=provider_input.track_id,
@@ -54,22 +56,10 @@ class BaselineAnalysisProvider:
                 f"Baseline analysis failed: {exc}",
             ) from exc
 
-        canonical_key = record.camelot or record.key
-        normalized = CanonicalAnalysisResult(
-            path=str(provider_input.path),
-            provider=self.metadata.name,
-            bpm=record.bpm,
-            bpm_confidence=record.bpm_confidence,
-            key=canonical_key,
-            key_system="camelot" if record.camelot else None,
-            energy=record.energy,
-            loudness_db=record.loudness_db,
-            duration_seconds=record.duration_seconds,
-            analysis_status="ok",
-            source_analysis_version=record.analysis_version,
-            provider_version=self.metadata.version,
-            track_id=record.track_id,
-            raw_provider_fields=asdict(record),
+        normalized = project_analysis_record_to_canonical(
+            record,
+            path=provider_input.path,
+            provider_metadata=self.metadata,
         )
 
         return ProviderOutput(
