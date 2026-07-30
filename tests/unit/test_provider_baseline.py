@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+from core.analysis.contracts import CanonicalAnalysisResult
 from core.analysis.provider_baseline import BaselineAnalysisProvider, create_baseline_provider
 from core.analysis.provider_contracts import ProviderInput
 from core.analysis.provider_errors import ProviderError
@@ -43,8 +44,13 @@ def test_baseline_provider_analyzes_audio_file(tmp_path: Path) -> None:
 
     assert output.provider == "baseline"
     assert output.backend == "audio-analyzer"
-    assert output.normalized["track_id"] == "track-1"
-    assert output.normalized["duration_seconds"] > 0
+    assert isinstance(output.normalized, CanonicalAnalysisResult)
+    assert output.normalized.track_id == "track-1"
+    assert output.normalized.duration_seconds is not None
+    assert output.normalized.duration_seconds > 0
+    assert output.normalized.provider == "baseline"
+    assert output.normalized.provider_version == provider.metadata.version
+    assert output.normalized.source_analysis_version is not None
 
 
 def test_baseline_provider_converts_runtime_failure_to_provider_error() -> None:

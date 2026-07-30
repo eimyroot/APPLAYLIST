@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+from core.analysis.contracts import CanonicalAnalysisResult
 from core.analysis.provider_contracts import (
     ProviderAvailability,
     ProviderInput,
@@ -10,7 +11,6 @@ from core.analysis.provider_contracts import (
     available,
 )
 from core.analysis.provider_errors import provider_runtime_error
-
 
 BASELINE_PROVIDER_METADATA = ProviderMetadata(
     name="baseline",
@@ -54,23 +54,23 @@ class BaselineAnalysisProvider:
                 f"Baseline analysis failed: {exc}",
             ) from exc
 
-        normalized = {
-            "track_id": record.track_id,
-            "analysis_version": record.analysis_version,
-            "features_version": record.features_version,
-            "extractor_backend": record.extractor_backend,
-            "extractor_name": record.extractor_name,
-            "bpm": record.bpm,
-            "bpm_confidence": record.bpm_confidence,
-            "key": record.key,
-            "scale": record.scale,
-            "camelot": record.camelot,
-            "energy": record.energy,
-            "loudness_db": record.loudness_db,
-            "duration_seconds": record.duration_seconds,
-            "harmonic_ratio": record.harmonic_ratio,
-            "percussive_ratio": record.percussive_ratio,
-        }
+        canonical_key = record.camelot or record.key
+        normalized = CanonicalAnalysisResult(
+            path=str(provider_input.path),
+            provider=self.metadata.name,
+            bpm=record.bpm,
+            bpm_confidence=record.bpm_confidence,
+            key=canonical_key,
+            key_system="camelot" if record.camelot else None,
+            energy=record.energy,
+            loudness_db=record.loudness_db,
+            duration_seconds=record.duration_seconds,
+            analysis_status="ok",
+            source_analysis_version=record.analysis_version,
+            provider_version=self.metadata.version,
+            track_id=record.track_id,
+            raw_provider_fields=asdict(record),
+        )
 
         return ProviderOutput(
             provider=self.metadata.name,

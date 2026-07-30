@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from core.analysis.contracts import CanonicalAnalysisResult
 from core.analysis.provider_contracts import (
     ProviderAvailability,
     ProviderInput,
@@ -56,13 +59,29 @@ def test_provider_availability_unavailable_helper() -> None:
 
 def test_provider_input_output_shapes() -> None:
     provider_input = ProviderInput(track_id="track-1", path=Path("/tmp/example.wav"))
-
+    canonical = CanonicalAnalysisResult(
+        path="/tmp/example.wav",
+        provider="baseline",
+        bpm=128.0,
+        track_id="track-1",
+    )
     provider_output = ProviderOutput(
         provider="baseline",
         backend="numpy-scipy",
         raw={"tempo": 128.0},
-        normalized={"bpm": 128.0},
+        normalized=canonical,
     )
 
     assert provider_input.track_id == "track-1"
-    assert provider_output.normalized["bpm"] == 128.0
+    assert provider_output.normalized is canonical
+    assert provider_output.normalized.bpm == 128.0
+
+
+def test_provider_output_rejects_untyped_normalized_dict() -> None:
+    with pytest.raises(TypeError, match="CanonicalAnalysisResult"):
+        ProviderOutput(
+            provider="baseline",
+            backend="numpy-scipy",
+            raw={"tempo": 128.0},
+            normalized={"bpm": 128.0},  # type: ignore[arg-type]
+        )

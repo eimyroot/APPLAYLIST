@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
+from core.analysis.contracts import CanonicalAnalysisResult
 
 ProviderCapability = Literal[
     "bpm",
@@ -14,7 +15,6 @@ ProviderCapability = Literal[
     "structure",
     "embeddings",
 ]
-
 
 ProviderStatus = Literal[
     "available",
@@ -55,7 +55,11 @@ class ProviderOutput:
     provider: str
     backend: str
     raw: dict[str, Any]
-    normalized: dict[str, Any]
+    normalized: CanonicalAnalysisResult
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.normalized, CanonicalAnalysisResult):
+            raise TypeError("ProviderOutput.normalized must be CanonicalAnalysisResult")
 
 
 @runtime_checkable

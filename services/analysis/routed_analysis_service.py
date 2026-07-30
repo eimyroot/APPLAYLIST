@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from core.analysis.provider_feature_flags import provider_analysis_mode
 from services.analysis.provider_analysis_service import (
@@ -48,13 +49,12 @@ class RoutedAnalysisService:
                 safe_baseline=safe_baseline,
                 provider_names=provider_names,
             )
-
             return RoutedAnalysisResult(
                 mode="provider",
                 provider=output.provider,
                 backend=output.backend,
                 track_id=track_id,
-                payload=output.normalized,
+                payload=output.normalized.to_dict(),
             )
 
         from services.analysis.analyzer import AudioAnalyzer
