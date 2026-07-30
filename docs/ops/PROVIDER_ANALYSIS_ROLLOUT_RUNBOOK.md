@@ -1,55 +1,62 @@
+---
+id: OPS-PROVIDER-ANALYSIS-ROLLOUT
+title: APPLAYLIST Provider Analysis Rollout Runbook
+status: ACCEPTED
+owner: APPLAYLIST Engineering
+created: 2026-07-30
+updated: 2026-07-30
+supersedes: null
+related:
+  - ../architecture/APPLAYLIST_PROVIDER_ANALYSIS_ROLLOUT.md
+  - ../../STATUS.md
+---
+
 # APPLAYLIST — Provider Analysis Rollout Runbook
 
-## Working Directory
+## Working directory
 
-cd /Users/eimyna/Documents/0_DEV/APPLAYLIST!
+```bash
+cd "/Users/eimyna/00_DEV/APPLAYLIST"
+```
 
-## Verify Provider Hardening
+## Verify provider layer
 
+```bash
 scripts/verify_provider_hardening.sh
-
-## Verify Rollout Readiness
-
 scripts/verify_provider_rollout_readiness.sh
+```
 
-## Run Full Tests
+## Run full tests
 
+Use the explicitly verified local interpreter:
+
+```bash
 .venv/bin/python -m pytest -q
+```
 
-## Enable Provider Path Locally
+## Provider mode
 
-APPLAYLIST_PROVIDER_ANALYSIS_ENABLED=1
+The provider path must remain explicit. To enable it for an authorized local verification:
 
-## Disable Provider Path
+```bash
+export APPLAYLIST_PROVIDER_ANALYSIS_ENABLED=1
+```
 
-APPLAYLIST_PROVIDER_ANALYSIS_ENABLED=0
+To return to the default legacy path:
 
-or unset the variable.
-
-## Safety Rule
-
-Do not change API defaults until routed analysis service is verified in local tests.
-
-## Expected Default
-
-Without environment variable:
-
-provider_analysis_mode({}) == legacy
-
-## Expected Provider Mode
-
-With:
-
-APPLAYLIST_PROVIDER_ANALYSIS_ENABLED=1
-
-mode should be:
-
-provider
-
-## Rollback Command
-
+```bash
 unset APPLAYLIST_PROVIDER_ANALYSIS_ENABLED
+```
 
 or:
 
+```bash
 export APPLAYLIST_PROVIDER_ANALYSIS_ENABLED=0
+```
+
+## Safety rules
+
+- do not silently change the existing API response shape;
+- do not make an optional provider a mandatory startup import;
+- do not treat provider failure as fake success;
+- do not promote provider mode to the default without a separately verified rollout work block.

@@ -1,42 +1,77 @@
 # APPLAYLIST
 
-APPLAYLIST je nový hlavní produkt: **AI-powered DJ playlist operating system**.
+APPLAYLIST is a local-first, privacy-first and explainable **DJ intelligence platform** for audio
+analysis, transition assessment, playlist/set preparation and future DJ workflow tooling.
 
-## Repo role
-- `APPLAYLIST` = nový produkční základ
-- `Applaylist-old` = donor logiky / reference / osnova
+The DJ remains the final decision maker.
 
-## Bundle 0
-Tento bundle vytváří:
-- production skeleton repa
-- base FastAPI app
-- health endpoint
-- central config
-- structured logging
-- docs bootstrap
-- local docker compose bootstrap
+## Truth and status
 
-## Spuštění lokálně
+Use these documents for current project truth:
+
+- [`STATUS.md`](STATUS.md) — current verified state and known debt;
+- [`ROADMAP.md`](ROADMAP.md) — canonical product/engineering sequence;
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — current component and authority boundaries;
+- [`PRODUCT.md`](PRODUCT.md) — current vs planned product capabilities;
+- [`VISION.md`](VISION.md) — product direction.
+
+Historical bundle documents under `docs/` remain evidence for their original work blocks. They are
+not automatically the current source of truth.
+
+## Current capability boundary
+
+The repository contains backend/API, persistence, jobs/workers, analysis-provider, composer,
+transition-foundation, explainability and export building blocks.
+
+However:
+
+- the legacy analysis path remains the default runtime path;
+- Transition Intelligence runtime activation is off;
+- WB006C beat-grid work is shadow evidence only;
+- downbeat, phrase, segment-level vocal/bass and overlap intelligence are not yet accepted;
+- desktop/product UI and release validation remain future roadmap work.
+
+## Local development
+
+Canonical working directory:
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-cp .env.example .env
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+cd "/Users/eimyna/00_DEV/APPLAYLIST"
 ```
 
-## Health check
-- `GET /health`
+Until EPIC-002 closes the deterministic engineering baseline, verify the interpreter explicitly.
+A supported baseline is Python 3.11 or 3.12.
 
-## Architektonický princip
+Example setup:
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip setuptools wheel
+.venv/bin/python -m pip install -e ".[dev]" -c constraints/audio-stack-py311.txt
+```
+
+Run tests:
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+Run the API locally:
+
+```bash
+.venv/bin/python -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Health endpoint:
+
 ```text
-API -> Services -> Repositories -> DB
-               -> Queue -> Workers
+GET /health
 ```
 
-## Co Bundle 0 ještě neobsahuje
-- jobs
-- DB implementaci
-- analyzer/composer/validator/export logiku
-- external connectors
-- AI embeddings
+EPIC-002 will replace ad-hoc local commands with the canonical
+`make doctor / lint / test / verify / bundle` interface.
+
+## Security and privacy
+
+Do not commit `.env`, credentials, local databases, audio libraries, private benchmark material,
+or unsanitized user data. See [`foundation/PUBLIC_PRIVATE_BOUNDARY.md`](foundation/PUBLIC_PRIVATE_BOUNDARY.md).
