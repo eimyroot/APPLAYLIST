@@ -1,5 +1,5 @@
-Found 179 errors.
-[*] 132 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
+Found 156 errors.
+[*] 115 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
 api/core/logging.py:1:1: I001 [*] Import block is un-sorted or un-formatted
 api/core/logging_setup.py:1:1: I001 [*] Import block is un-sorted or un-formatted
 api/middleware/rate_limit.py:16:21: UP006 [*] Use `collections.defaultdict` instead of `DefaultDict` for type annotation
@@ -17,10 +17,6 @@ api/routes/pipeline.py:17:14: UP045 [*] Use `X | None` for type annotations
 api/routes/pipeline.py:18:11: UP045 [*] Use `X | None` for type annotations
 api/security/auth_gate.py:1:1: I001 [*] Import block is un-sorted or un-formatted
 api/security/security.py:1:1: I001 [*] Import block is un-sorted or un-formatted
-core/analysis/adapter.py:18:42: UP006 [*] Use `dict` instead of `Dict` for type annotation
-core/analysis/adapter.py:3:1: UP035 `typing.Dict` is deprecated, use `dict` instead
-core/analysis/adapter.py:79:44: UP045 [*] Use `X | None` for type annotations
-core/analysis/adapter.py:9:30: UP045 [*] Use `X | None` for type annotations
 core/analysis/benchmark.py:22:20: UP045 [*] Use `X | None` for type annotations
 core/analysis/benchmark.py:23:6: UP006 [*] Use `dict` instead of `Dict` for type annotation
 core/analysis/benchmark.py:24:11: UP006 [*] Use `list` instead of `List` for type annotation
@@ -35,25 +31,6 @@ core/analysis/benchmark_compare.py:3:1: UP035 `typing.Dict` is deprecated, use `
 core/analysis/benchmark_compare.py:6:40: UP006 [*] Use `dict` instead of `Dict` for type annotation
 core/analysis/benchmark_compare.py:6:67: UP006 [*] Use `dict` instead of `Dict` for type annotation
 core/analysis/benchmark_compare.py:6:86: UP006 [*] Use `dict` instead of `Dict` for type annotation
-core/analysis/contracts.py:11:10: UP045 [*] Use `X | None` for type annotations
-core/analysis/contracts.py:12:21: UP045 [*] Use `X | None` for type annotations
-core/analysis/contracts.py:13:10: UP045 [*] Use `X | None` for type annotations
-core/analysis/contracts.py:14:21: UP045 [*] Use `X | None` for type annotations
-core/analysis/contracts.py:15:13: UP045 [*] Use `X | None` for type annotations
-core/analysis/contracts.py:16:18: UP045 [*] Use `X | None` for type annotations
-core/analysis/contracts.py:17:23: UP045 [*] Use `X | None` for type annotations
-core/analysis/contracts.py:18:17: UP045 [*] Use `X | None` for type annotations
-core/analysis/contracts.py:22:26: UP006 [*] Use `dict` instead of `Dict` for type annotation
-core/analysis/contracts.py:4:1: UP035 `typing.Dict` is deprecated, use `dict` instead
-core/analysis/normalize.py:15:5: I001 [*] Import block is un-sorted or un-formatted
-core/analysis/normalize.py:16:5: UP035 `typing.Dict` is deprecated, use `dict` instead
-core/analysis/normalize.py:16:5: UP035 `typing.List` is deprecated, use `list` instead
-core/analysis/normalize.py:4:1: UP035 `typing.Dict` is deprecated, use `dict` instead
-core/analysis/normalize.py:53:19: UP006 [*] Use `list` instead of `List` for type annotation
-core/analysis/normalize.py:54:30: UP006 [*] Use `dict` instead of `Dict` for type annotation
-core/analysis/normalize.py:86:25: UP017 [*] Use `datetime.UTC` alias
-core/analysis/normalize.py:95:101: E501 Line too long (102 > 100)
-core/analysis/normalize.py:95:60: UP006 [*] Use `dict` instead of `Dict` for type annotation
 core/analysis/provider_baseline.py:1:1: I001 [*] Import block is un-sorted or un-formatted
 core/analysis/provider_contracts.py:1:1: I001 [*] Import block is un-sorted or un-formatted
 core/analysis/provider_errors.py:1:1: I001 [*] Import block is un-sorted or un-formatted
