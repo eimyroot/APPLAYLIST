@@ -5,11 +5,14 @@ from enum import StrEnum
 from math import isfinite
 
 from core.analysis.provider_contracts import ProviderMetadata
-from core.analysis.rhythm_contracts import BeatGrid, EvidenceStatus
+from core.analysis.rhythm_contracts import BeatGrid, EvidenceStatus, SourceAudioIdentity
 from data.models.analysis_record import AnalysisRecord
 
 DEFAULT_RELATIVE_TOLERANCE = 0.04
 WB006C_SHADOW_METHOD = "wb006c-shadow-beat-grid-v1"
+WB006C_SHADOW_PROVIDER = "librosa-shadow"
+WB006C_SHADOW_PROVIDER_VERSION_PREFIX = "0.10."
+WB006C_SHADOW_ALGORITHM_VERSION = "wb006c-librosa-beat-grid-v1"
 
 
 class TempoRelationship(StrEnum):
@@ -36,6 +39,7 @@ class CanonicalTempoEvidence:
     provider_version: str
     algorithm_version: str
     source_analysis_version: str
+    source_identity: SourceAudioIdentity
     duration_seconds: float | None
     bpm: float | None
     bpm_confidence: float | None
@@ -52,6 +56,8 @@ class CanonicalTempoEvidence:
             if not value:
                 raise ValueError(f"{field_name} must not be empty")
             object.__setattr__(self, field_name, value)
+        if not isinstance(self.source_identity, SourceAudioIdentity):
+            raise ValueError("source_identity must be a SourceAudioIdentity")
         if self.duration_seconds is not None:
             duration = float(self.duration_seconds)
             if not isfinite(duration) or duration <= 0.0:
@@ -74,6 +80,7 @@ class CanonicalTempoEvidence:
         record: AnalysisRecord,
         *,
         provider_metadata: ProviderMetadata,
+        source_identity: SourceAudioIdentity,
     ) -> CanonicalTempoEvidence:
         if not record.extractor_name:
             raise ValueError("analysis record extractor_name must be explicit")
@@ -85,6 +92,7 @@ class CanonicalTempoEvidence:
             provider_version=provider_metadata.version,
             algorithm_version=record.extractor_name,
             source_analysis_version=record.analysis_version,
+            source_identity=source_identity,
             duration_seconds=record.duration_seconds,
             bpm=record.bpm,
             bpm_confidence=record.bpm_confidence,
@@ -128,8 +136,16 @@ def _validate_shadow_binding(canonical: CanonicalTempoEvidence, beat_grid: BeatG
     provenance = beat_grid.provenance
     if provenance.method != WB006C_SHADOW_METHOD:
         raise ValueError("beat-grid provenance is not the WB006C shadow method")
+    if provenance.provider != WB006C_SHADOW_PROVIDER:
+        raise ValueError("shadow provider identity does not match WB006C")
+    if not provenance.provider_version.startswith(WB006C_SHADOW_PROVIDER_VERSION_PREFIX):
+        raise ValueError("shadow provider version is outside the WB006C Librosa series")
+    if provenance.algorithm_version != WB006C_SHADOW_ALGORITHM_VERSION:
+        raise ValueError("shadow algorithm identity does not match WB006C")
     if provenance.source_analysis_version != canonical.source_analysis_version:
         raise ValueError("shadow source analysis version does not match canonical evidence")
+    if provenance.source_identity != canonical.source_identity:
+        raise ValueError("shadow source identity does not match canonical evidence")
 
 
 def reconcile_shadow_beat_grid(
@@ -203,6 +219,9 @@ __all__ = [
     "DEFAULT_RELATIVE_TOLERANCE",
     "ShadowBeatGridReconciliation",
     "TempoRelationship",
+    "WB006C_SHADOW_ALGORITHM_VERSION",
     "WB006C_SHADOW_METHOD",
+    "WB006C_SHADOW_PROVIDER",
+    "WB006C_SHADOW_PROVIDER_VERSION_PREFIX",
     "reconcile_shadow_beat_grid",
 ]

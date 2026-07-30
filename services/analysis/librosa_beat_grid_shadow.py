@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 from pathlib import Path
 from typing import Any
@@ -10,9 +11,12 @@ from core.analysis.rhythm_contracts import (
     EvidenceProvenance,
     EvidenceStatus,
     RhythmicStructureAnalysis,
+    SourceAudioIdentity,
 )
 from core.analysis.rhythm_reconciliation import (
+    WB006C_SHADOW_ALGORITHM_VERSION,
     WB006C_SHADOW_METHOD,
+    WB006C_SHADOW_PROVIDER,
     CanonicalTempoEvidence,
 )
 
@@ -20,8 +24,8 @@ from core.analysis.rhythm_reconciliation import (
 class LibrosaBeatGridShadowAnalyzer:
     """Explicit-only, read-only beat-grid candidate with zero runtime registration."""
 
-    provider_name = "librosa-shadow"
-    algorithm_version = "wb006c-librosa-beat-grid-v1"
+    provider_name = WB006C_SHADOW_PROVIDER
+    algorithm_version = WB006C_SHADOW_ALGORITHM_VERSION
     shadow_method = WB006C_SHADOW_METHOD
     sample_rate = 22_050
     hop_length = 512
@@ -36,6 +40,7 @@ class LibrosaBeatGridShadowAnalyzer:
         source = self._validated_source(path)
         if canonical_evidence.track_id != track_id:
             raise ValueError("canonical track_id does not match requested track_id")
+        self._validate_source_binding(source, canonical_evidence.source_identity)
 
         import librosa
         import numpy as np
@@ -46,6 +51,7 @@ class LibrosaBeatGridShadowAnalyzer:
             mono=True,
             dtype=np.float32,
         )
+        self._validate_source_binding(source, canonical_evidence.source_identity)
         waveform = np.asarray(waveform, dtype=np.float32)
         if waveform.ndim != 1 or waveform.size == 0:
             raise ValueError("decoded audio is empty or not mono")
@@ -63,6 +69,7 @@ class LibrosaBeatGridShadowAnalyzer:
             algorithm_version=self.algorithm_version,
             method=self.shadow_method,
             source_analysis_version=canonical_evidence.source_analysis_version,
+            source_identity=canonical_evidence.source_identity,
         )
         if float(np.max(np.abs(waveform))) < 1e-7:
             return self._unavailable(
@@ -187,6 +194,24 @@ class LibrosaBeatGridShadowAnalyzer:
         if not resolved.is_file():
             raise ValueError("analysis path must reference a regular file")
         return resolved
+
+    @staticmethod
+    def _sha256_file(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @classmethod
+    def _validate_source_binding(cls, source: Path, identity: SourceAudioIdentity) -> None:
+        expected_path = Path(identity.resolved_path).resolve(strict=False)
+        if source != expected_path:
+            raise ValueError("shadow audio path does not match canonical source identity")
+        if source.stat().st_size != identity.size_bytes:
+            raise ValueError("shadow audio size does not match canonical source identity")
+        if cls._sha256_file(source) != identity.sha256:
+            raise ValueError("shadow audio SHA-256 does not match canonical source identity")
 
     @staticmethod
     def _validate_duration_binding(observed: float, canonical: float | None) -> None:

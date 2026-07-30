@@ -8,7 +8,16 @@ from core.analysis.rhythm_contracts import (
     EvidenceProvenance,
     EvidenceStatus,
     RhythmicStructureAnalysis,
+    SourceAudioIdentity,
 )
+
+
+def source_identity() -> SourceAudioIdentity:
+    return SourceAudioIdentity(
+        resolved_path="/tmp/applaylist-track.wav",
+        sha256="a" * 64,
+        size_bytes=1024,
+    )
 
 
 def provenance() -> EvidenceProvenance:
@@ -18,6 +27,7 @@ def provenance() -> EvidenceProvenance:
         algorithm_version="wb006c-librosa-beat-grid-v1",
         method="wb006c-shadow-beat-grid-v1",
         source_analysis_version="0.1.0",
+        source_identity=source_identity(),
     )
 
 
@@ -28,6 +38,21 @@ def beat(index: int, time_seconds: float) -> BeatEvent:
         confidence=0.8,
         is_downbeat=None,
     )
+
+
+def test_source_identity_requires_absolute_path_and_sha256() -> None:
+    with pytest.raises(ValueError, match="absolute"):
+        SourceAudioIdentity(
+            resolved_path="relative.wav",
+            sha256="a" * 64,
+            size_bytes=1,
+        )
+    with pytest.raises(ValueError, match="64-character"):
+        SourceAudioIdentity(
+            resolved_path="/tmp/track.wav",
+            sha256="not-a-digest",
+            size_bytes=1,
+        )
 
 
 def test_unknown_downbeat_is_fail_closed() -> None:

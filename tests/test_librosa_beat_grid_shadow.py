@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import struct
 import wave
 from pathlib import Path
 
 import numpy as np
+import pytest
 
-from core.analysis.rhythm_contracts import EvidenceStatus
+from core.analysis.rhythm_contracts import EvidenceStatus, SourceAudioIdentity
 from core.analysis.rhythm_reconciliation import (
     CanonicalTempoEvidence,
     TempoRelationship,
@@ -52,9 +54,19 @@ def _write_silence(path: Path, *, duration: float = 4.0) -> float:
     return duration
 
 
+def _source_identity(path: Path) -> SourceAudioIdentity:
+    resolved = path.resolve(strict=True)
+    return SourceAudioIdentity(
+        resolved_path=str(resolved),
+        sha256=hashlib.sha256(resolved.read_bytes()).hexdigest(),
+        size_bytes=resolved.stat().st_size,
+    )
+
+
 def canonical(
     track_id: str,
     *,
+    source: Path,
     duration: float,
     bpm: float | None = 120.0,
 ) -> CanonicalTempoEvidence:
@@ -64,6 +76,7 @@ def canonical(
         provider_version="0.1.0",
         algorithm_version="bundle-4-audio-analyzer",
         source_analysis_version="0.1.0",
+        source_identity=_source_identity(source),
         duration_seconds=duration,
         bpm=bpm,
         bpm_confidence=None,
@@ -73,7 +86,7 @@ def canonical(
 def test_shadow_analyzer_emits_read_only_beat_grid(tmp_path: Path) -> None:
     source = tmp_path / "clicks.wav"
     duration = _write_click_track(source)
-    evidence = canonical("track", duration=duration)
+    evidence = canonical("track", source=source, duration=duration)
 
     result = LibrosaBeatGridShadowAnalyzer().analyze(
         str(source.resolve()),
@@ -85,6 +98,7 @@ def test_shadow_analyzer_emits_read_only_beat_grid(tmp_path: Path) -> None:
     assert len(result.beat_grid.beats) >= 2
     assert result.beat_grid.tempo_bpm is not None
     assert result.beat_grid.tempo_confidence is not None
+    assert result.beat_grid.provenance.source_identity == evidence.source_identity
     assert all(beat.is_downbeat is None for beat in result.beat_grid.beats)
     assert result.beat_grid.meter_beats_per_bar is None
     reconciliation = reconcile_shadow_beat_grid(evidence, result.beat_grid)
@@ -101,7 +115,7 @@ def test_shadow_analyzer_returns_unavailable_for_silence(tmp_path: Path) -> None
     duration = _write_silence(source)
     result = LibrosaBeatGridShadowAnalyzer().analyze(
         str(source.resolve()),
-        canonical_evidence=canonical("silence", duration=duration),
+        canonical_evidence=canonical("silence", source=source, duration=duration),
         track_id="silence",
     )
     assert result.beat_grid.status is EvidenceStatus.UNAVAILABLE
@@ -112,14 +126,41 @@ def test_shadow_analyzer_returns_unavailable_for_silence(tmp_path: Path) -> None
 def test_shadow_analyzer_rejects_track_binding_mismatch(tmp_path: Path) -> None:
     source = tmp_path / "clicks.wav"
     duration = _write_click_track(source)
-    evidence = canonical("canonical-track", duration=duration)
-    try:
+    evidence = canonical("canonical-track", source=source, duration=duration)
+    with pytest.raises(ValueError, match="track_id"):
         LibrosaBeatGridShadowAnalyzer().analyze(
             str(source.resolve()),
             canonical_evidence=evidence,
             track_id="other-track",
         )
-    except ValueError as exc:
-        assert "track_id" in str(exc)
-    else:
-        raise AssertionError("track binding mismatch must fail closed")
+
+
+def test_shadow_analyzer_rejects_different_source_path_with_same_duration(
+    tmp_path: Path,
+) -> None:
+    canonical_source = tmp_path / "canonical.wav"
+    shadow_source = tmp_path / "shadow.wav"
+    duration = _write_click_track(canonical_source)
+    _write_click_track(shadow_source)
+    evidence = canonical("track", source=canonical_source, duration=duration)
+
+    with pytest.raises(ValueError, match="path does not match"):
+        LibrosaBeatGridShadowAnalyzer().analyze(
+            str(shadow_source.resolve()),
+            canonical_evidence=evidence,
+            track_id="track",
+        )
+
+
+def test_shadow_analyzer_rejects_content_change_after_source_binding(tmp_path: Path) -> None:
+    source = tmp_path / "track.wav"
+    duration = _write_click_track(source)
+    evidence = canonical("track", source=source, duration=duration)
+    _write_silence(source, duration=duration)
+
+    with pytest.raises(ValueError, match="SHA-256"):
+        LibrosaBeatGridShadowAnalyzer().analyze(
+            str(source.resolve()),
+            canonical_evidence=evidence,
+            track_id="track",
+        )

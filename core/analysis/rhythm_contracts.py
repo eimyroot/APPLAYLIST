@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
+from pathlib import Path
 
 ANALYSIS_VERSION = "canonical-rhythmic-beat-grid-shadow-v1"
+_HEX_DIGITS = frozenset("0123456789abcdef")
 
 
 def _required_text(value: str, field_name: str) -> str:
@@ -37,12 +39,37 @@ class EvidenceStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class SourceAudioIdentity:
+    resolved_path: str
+    sha256: str
+    size_bytes: int
+
+    def __post_init__(self) -> None:
+        path_text = _required_text(self.resolved_path, "resolved_path")
+        path = Path(path_text)
+        if not path.is_absolute():
+            raise ValueError("resolved_path must be absolute")
+        object.__setattr__(self, "resolved_path", str(path))
+
+        digest = _required_text(self.sha256, "sha256").lower()
+        if len(digest) != 64 or any(char not in _HEX_DIGITS for char in digest):
+            raise ValueError("sha256 must be a 64-character hexadecimal digest")
+        object.__setattr__(self, "sha256", digest)
+
+        if isinstance(self.size_bytes, bool) or not isinstance(self.size_bytes, int):
+            raise ValueError("size_bytes must be an integer")
+        if self.size_bytes < 0:
+            raise ValueError("size_bytes must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
 class EvidenceProvenance:
     provider: str
     provider_version: str
     algorithm_version: str
     method: str
     source_analysis_version: str
+    source_identity: SourceAudioIdentity
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "provider", _required_text(self.provider, "provider"))
@@ -62,6 +89,8 @@ class EvidenceProvenance:
             "source_analysis_version",
             _required_text(self.source_analysis_version, "source_analysis_version"),
         )
+        if not isinstance(self.source_identity, SourceAudioIdentity):
+            raise ValueError("source_identity must be a SourceAudioIdentity")
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,4 +218,5 @@ __all__ = [
     "EvidenceProvenance",
     "EvidenceStatus",
     "RhythmicStructureAnalysis",
+    "SourceAudioIdentity",
 ]
