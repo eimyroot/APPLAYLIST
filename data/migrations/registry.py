@@ -5,6 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from data.migrations.versions.v001_canonical_analyses import apply_v001_canonical_analyses
+
 
 class MigrationRegistryError(RuntimeError):
     """Raised when a migration registry is malformed."""
@@ -39,7 +41,14 @@ class Migration:
     apply: Callable[[MigrationConnection], None]
 
 
-MIGRATIONS: tuple[Migration, ...] = ()
+MIGRATIONS: tuple[Migration, ...] = (
+    Migration(
+        from_version=0,
+        to_version=1,
+        name="v001_canonical_analyses",
+        apply=apply_v001_canonical_analyses,
+    ),
+)
 
 
 def validate_registry(migrations: tuple[Migration, ...]) -> None:
