@@ -84,3 +84,20 @@ def test_invalid_flag_fails_closed_to_legacy(
 
     assert result.mode == "legacy"
     assert result.provider == "legacy"
+
+
+def test_routed_provider_mode_keeps_writer_disabled_by_default(
+    tmp_path: Path,
+) -> None:
+    audio_path = tmp_path / "provider-writer-default-off.wav"
+    _write_test_tone(audio_path)
+
+    result = create_routed_analysis_service().analyze(
+        track_id="provider-writer-default-off",
+        path=audio_path,
+        env={"APPLAYLIST_PROVIDER_ANALYSIS_ENABLED": "1"},
+        provider_names=["baseline"],
+    )
+
+    assert result.mode == "provider"
+    assert result.track_id == "provider-writer-default-off"

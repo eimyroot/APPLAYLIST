@@ -1,5 +1,5 @@
-Found 151 errors.
-[*] 112 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
+Found 150 errors.
+[*] 111 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
 api/core/logging.py:1:1: I001 [*] Import block is un-sorted or un-formatted
 api/core/logging_setup.py:1:1: I001 [*] Import block is un-sorted or un-formatted
 api/middleware/rate_limit.py:16:21: UP006 [*] Use `collections.defaultdict` instead of `DefaultDict` for type annotation
@@ -118,7 +118,6 @@ services/analysis/analyzer.py:43:98: UP045 [*] Use `X | None` for type annotatio
 services/analysis/analyzer.py:48:101: E501 Line too long (107 > 100)
 services/analysis/analyzer.py:49:101: E501 Line too long (107 > 100)
 services/analysis/analyzer.py:88:9: F841 Local variable `zcr_mean` is assigned to but never used
-services/analysis/provider_analysis_service.py:4:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
 services/export/exporter.py:58:101: E501 Line too long (102 > 100)
 services/export/exporter.py:59:101: E501 Line too long (102 > 100)
 services/export/exporter.py:5:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
