@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from core.analysis.adapter import canonicalize_provider_result
-from core.analysis.contracts import CanonicalMirAnalysis
+from core.analysis.contracts import CanonicalAnalysisResult, CanonicalMirAnalysis
+
+
+def test_canonical_contract_has_single_runtime_authority():
+    assert CanonicalMirAnalysis is CanonicalAnalysisResult
 
 
 def test_canonicalize_provider_result_from_nested_payload():
@@ -17,7 +21,7 @@ def test_canonicalize_provider_result_from_nested_payload():
 
     result = canonicalize_provider_result(payload, path="/tmp/demo.mp3")
 
-    assert isinstance(result, CanonicalMirAnalysis)
+    assert isinstance(result, CanonicalAnalysisResult)
     assert result.path == "/tmp/demo.mp3"
     assert result.provider == "librosa"
     assert result.bpm == 128.4
@@ -25,6 +29,7 @@ def test_canonicalize_provider_result_from_nested_payload():
     assert result.key == "10A"
     assert result.key_confidence == 0.88
     assert result.energy == 0.67
+    assert result.energy_confidence is None
     assert result.loudness_db == -8.4
     assert result.duration_seconds == 367.2
     assert result.genre_hint == "tech house"
@@ -40,6 +45,7 @@ def test_canonicalize_provider_result_from_flat_payload():
         "key": "11A",
         "key_confidence": "0.81",
         "energy": "0.52",
+        "energy_confidence": "0.66",
         "loudness_db": "-9.1",
         "duration_sec": "301.5",
         "genre_hint": "minimal techno",
@@ -53,6 +59,7 @@ def test_canonicalize_provider_result_from_flat_payload():
     assert result.key == "11A"
     assert result.key_confidence == 0.81
     assert result.energy == 0.52
+    assert result.energy_confidence == 0.66
     assert result.loudness_db == -9.1
     assert result.duration_seconds == 301.5
     assert result.genre_hint == "minimal techno"

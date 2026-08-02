@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+from core.analysis.contracts import CanonicalAnalysisResult
 from core.analysis.provider_errors import ProviderError
 from services.analysis.provider_analysis_service import (
     ProviderAnalysisService,
@@ -39,11 +40,15 @@ def test_provider_analysis_service_runs_baseline_provider(tmp_path: Path) -> Non
     )
 
     assert output.provider == "baseline"
-    assert output.normalized["track_id"] == "track-1"
-    assert output.normalized["duration_seconds"] > 0
+    assert isinstance(output.normalized, CanonicalAnalysisResult)
+    assert output.normalized.track_id == "track-1"
+    assert output.normalized.duration_seconds is not None
+    assert output.normalized.duration_seconds > 0
 
 
-def test_provider_analysis_service_returns_controlled_error_when_no_provider_available(tmp_path: Path) -> None:
+def test_provider_analysis_service_returns_controlled_error_when_no_provider_available(
+    tmp_path: Path,
+) -> None:
     audio_path = tmp_path / "tone.wav"
     _write_test_tone(audio_path)
 

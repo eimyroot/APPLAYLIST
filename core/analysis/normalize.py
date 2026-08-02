@@ -1,58 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any
 
-try:
-    from core.analysis.contracts import (
-        AnalysisProvenance,
-        CanonicalAnalysisResult,
-        EnergyEstimate,
-        KeyEstimate,
-        TempoEstimate,
-    )
-except Exception:
-    from dataclasses import dataclass, field
-    from typing import Any, List, Dict
-
-    @dataclass
-    class TempoEstimate:
-        bpm: float | None = None
-        confidence: float | None = None
-
-    @dataclass
-    class KeyEstimate:
-        value: str | None = None
-        system: str = "camelot"
-        confidence: float | None = None
-
-    @dataclass
-    class EnergyEstimate:
-        value: float | None = None
-        confidence: float | None = None
-
-    @dataclass
-    class AnalysisProvenance:
-        provider: str
-        provider_version: str | None = None
-        analysis_version: str | None = None
-        analyzed_at: str | None = None
-
-    @dataclass
-    class CanonicalAnalysisResult:
-        track_id: str | None = None
-        source_path: str = ""
-        tempo: TempoEstimate = field(default_factory=TempoEstimate)
-        key: KeyEstimate = field(default_factory=KeyEstimate)
-        energy: EnergyEstimate = field(default_factory=EnergyEstimate)
-        duration_seconds: float | None = None
-        sample_rate_hz: int | None = None
-        channels: int | None = None
-        loudness_integrated_lufs: float | None = None
-        provenance: AnalysisProvenance | None = None
-        warnings: List[str] = field(default_factory=list)
-        raw_provider_fields: Dict[str, Any] = field(default_factory=dict)
-
+from core.analysis.contracts import CanonicalAnalysisResult
 
 NOTE_TO_CAMELOT = {
     "C major": "8B",
@@ -82,8 +32,26 @@ NOTE_TO_CAMELOT = {
 }
 
 
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+def _as_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_str(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _essentia_key_to_camelot(key_value: str | None) -> str | None:
@@ -92,7 +60,10 @@ def _essentia_key_to_camelot(key_value: str | None) -> str | None:
     return NOTE_TO_CAMELOT.get(key_value)
 
 
-def normalize_provider_result(provider_name: str, payload: Dict[str, Any]) -> CanonicalAnalysisResult:
+def normalize_provider_result(
+    provider_name: str,
+    payload: dict[str, Any],
+) -> CanonicalAnalysisResult:
     provider = provider_name.strip().lower()
 
     source_path = payload.get("path") or payload.get("source_path") or ""
@@ -100,61 +71,56 @@ def normalize_provider_result(provider_name: str, payload: Dict[str, Any]) -> Ca
     provider_version = payload.get("provider_version")
 
     bpm = payload.get("bpm")
-    bpm_conf = payload.get("bpm_confidence")
+    bpm_confidence = payload.get("bpm_confidence")
 
     key_value = payload.get("key") or payload.get("camelot")
     key_system = payload.get("key_system", "camelot")
-    key_conf = payload.get("key_confidence")
+    key_confidence = payload.get("key_confidence")
 
-    energy_value = payload.get("energy")
-    energy_conf = payload.get("energy_confidence")
+    energy = payload.get("energy")
+    energy_confidence = payload.get("energy_confidence")
 
     if provider == "librosa":
         bpm = bpm if bpm is not None else payload.get("tempo")
-        if bpm_conf is None:
-            bpm_conf = 0.5 if bpm is not None else None
 
     elif provider == "essentia":
         bpm = bpm if bpm is not None else payload.get("rhythm_bpm")
-        if bpm_conf is None:
-            bpm_conf = 0.8 if bpm is not None else None
-
         if key_value is None:
             raw_key = payload.get("key_key")
-            key_value = _essentia_key_to_camelot(raw_key)
+            key_value = _essentia_key_to_camelot(_optional_str(raw_key))
             if raw_key and key_value is None:
                 warnings.append(f"unmapped Essentia key: {raw_key}")
-
         key_system = "camelot"
-        if key_conf is None:
-            key_conf = payload.get("key_strength")
-
-        if energy_value is None:
-            energy_value = payload.get("loudness_energy")
-        if energy_conf is None:
-            energy_conf = 0.7 if energy_value is not None else None
+        if energy is None:
+            energy = payload.get("loudness_energy")
 
     elif provider == "mock":
         warnings.append("mock provider used for normalization test path")
 
-    provenance = AnalysisProvenance(
-        provider=provider,
-        provider_version=provider_version,
-        analysis_version="bundle26-essentia-v1",
-        analyzed_at=payload.get("analyzed_at") or _utc_now_iso(),
-    )
+    status = payload.get("status") or payload.get("analysis_status") or "unknown"
+    genre_hint = payload.get("genre_hint") or payload.get("genre")
 
     return CanonicalAnalysisResult(
-        track_id=payload.get("track_id"),
-        source_path=source_path,
-        tempo=TempoEstimate(bpm=bpm, confidence=bpm_conf),
-        key=KeyEstimate(value=key_value, system=key_system, confidence=key_conf),
-        energy=EnergyEstimate(value=energy_value, confidence=energy_conf),
-        duration_seconds=payload.get("duration_seconds"),
-        sample_rate_hz=payload.get("sample_rate_hz"),
-        channels=payload.get("channels"),
-        loudness_integrated_lufs=payload.get("loudness_integrated_lufs"),
-        provenance=provenance,
-        warnings=warnings,
+        track_id=_optional_str(payload.get("track_id")),
+        path=str(source_path),
+        provider=provider,
+        bpm=_as_float(bpm),
+        bpm_confidence=_as_float(bpm_confidence),
+        key=key_value if isinstance(key_value, str) else None,
+        key_confidence=_as_float(key_confidence),
+        key_system=key_system if isinstance(key_system, str) else None,
+        energy=_as_float(energy),
+        energy_confidence=_as_float(energy_confidence),
+        loudness_db=_as_float(payload.get("loudness_db")),
+        loudness_integrated_lufs=_as_float(payload.get("loudness_integrated_lufs")),
+        duration_seconds=_as_float(payload.get("duration_seconds")),
+        sample_rate_hz=_as_int(payload.get("sample_rate_hz")),
+        channels=_as_int(payload.get("channels")),
+        genre_hint=genre_hint if isinstance(genre_hint, str) else None,
+        analysis_status=str(status),
+        source_analysis_version=_optional_str(payload.get("analysis_version")),
+        provider_version=_optional_str(provider_version),
+        analyzed_at=_optional_str(payload.get("analyzed_at")),
+        warnings=tuple(str(item) for item in warnings),
         raw_provider_fields=dict(payload),
     )

@@ -29,8 +29,8 @@ def test_orchestrator_runs_baseline_provider(tmp_path: Path) -> None:
     )
 
     assert output.provider == "baseline"
-    assert output.normalized["track_id"] == "track-1"
-    assert output.normalized["duration_seconds"] > 0
+    assert output.normalized.track_id == "track-1"
+    assert output.normalized.duration_seconds > 0
 
 
 def test_orchestrator_returns_controlled_error_when_no_provider_available(tmp_path: Path) -> None:
@@ -50,7 +50,9 @@ def test_orchestrator_returns_controlled_error_when_no_provider_available(tmp_pa
     assert exc_info.value.details.provider == "registry"
 
 
-def test_orchestrator_returns_controlled_error_for_selected_unregistered_adapter(tmp_path: Path) -> None:
+def test_orchestrator_returns_controlled_error_for_selected_unregistered_adapter(
+    tmp_path: Path,
+) -> None:
     audio_path = tmp_path / "tone.wav"
     _write_test_tone(audio_path)
 

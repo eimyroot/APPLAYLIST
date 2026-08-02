@@ -11,7 +11,6 @@ from core.analysis.provider_contracts import (
 )
 from core.analysis.provider_errors import provider_runtime_error
 
-
 BASELINE_PROVIDER_METADATA = ProviderMetadata(
     name="baseline",
     version="0.1.0",
@@ -43,6 +42,9 @@ class BaselineAnalysisProvider:
     def analyze(self, provider_input: ProviderInput) -> ProviderOutput:
         try:
             from services.analysis.analyzer import AudioAnalyzer
+            from services.analysis.canonical_projection import (
+                project_analysis_record_to_canonical,
+            )
 
             record = AudioAnalyzer().analyze_file(
                 track_id=provider_input.track_id,
@@ -54,23 +56,11 @@ class BaselineAnalysisProvider:
                 f"Baseline analysis failed: {exc}",
             ) from exc
 
-        normalized = {
-            "track_id": record.track_id,
-            "analysis_version": record.analysis_version,
-            "features_version": record.features_version,
-            "extractor_backend": record.extractor_backend,
-            "extractor_name": record.extractor_name,
-            "bpm": record.bpm,
-            "bpm_confidence": record.bpm_confidence,
-            "key": record.key,
-            "scale": record.scale,
-            "camelot": record.camelot,
-            "energy": record.energy,
-            "loudness_db": record.loudness_db,
-            "duration_seconds": record.duration_seconds,
-            "harmonic_ratio": record.harmonic_ratio,
-            "percussive_ratio": record.percussive_ratio,
-        }
+        normalized = project_analysis_record_to_canonical(
+            record,
+            path=provider_input.path,
+            provider_metadata=self.metadata,
+        )
 
         return ProviderOutput(
             provider=self.metadata.name,

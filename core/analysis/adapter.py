@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
-from core.analysis.contracts import CanonicalMirAnalysis
+from core.analysis.contracts import CanonicalAnalysisResult
 from core.analysis.providers import select_best_provider
 
 
-def _as_float(value: Any) -> Optional[float]:
+def _as_float(value: Any) -> float | None:
     if value is None:
         return None
     try:
@@ -15,7 +15,14 @@ def _as_float(value: Any) -> Optional[float]:
         return None
 
 
-def canonicalize_provider_result(result: Dict[str, Any], path: str) -> CanonicalMirAnalysis:
+def _optional_str(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def canonicalize_provider_result(
+    result: dict[str, Any],
+    path: str,
+) -> CanonicalAnalysisResult:
     provider = result.get("provider", "unknown")
     status = result.get("status", "unknown")
 
@@ -46,6 +53,10 @@ def canonicalize_provider_result(result: Dict[str, Any], path: str) -> Canonical
     if energy is None:
         energy = metrics.get("energy_score")
 
+    energy_confidence = result.get("energy_confidence")
+    if energy_confidence is None:
+        energy_confidence = metrics.get("energy_confidence")
+
     loudness_db = result.get("loudness_db")
     if loudness_db is None:
         loudness_db = metrics.get("loudness_db")
@@ -60,25 +71,43 @@ def canonicalize_provider_result(result: Dict[str, Any], path: str) -> Canonical
     if genre_hint is None:
         genre_hint = tags.get("primary_genre_hint") or result.get("genre")
 
-    return CanonicalMirAnalysis(
+    warnings = result.get("warnings", ())
+    if not isinstance(warnings, (list, tuple)):
+        warnings = (str(warnings),)
+
+    sample_rate_hz = result.get("sample_rate_hz")
+    channels = result.get("channels")
+
+    return CanonicalAnalysisResult(
         path=path,
         provider=str(provider),
         bpm=_as_float(bpm),
         bpm_confidence=_as_float(bpm_confidence),
         key=key if isinstance(key, str) else None,
         key_confidence=_as_float(key_confidence),
+        key_system=_optional_str(result.get("key_system")),
         energy=_as_float(energy),
+        energy_confidence=_as_float(energy_confidence),
         loudness_db=_as_float(loudness_db),
+        loudness_integrated_lufs=_as_float(result.get("loudness_integrated_lufs")),
         duration_seconds=_as_float(duration_seconds),
+        sample_rate_hz=sample_rate_hz if isinstance(sample_rate_hz, int) else None,
+        channels=channels if isinstance(channels, int) else None,
         genre_hint=genre_hint if isinstance(genre_hint, str) else None,
         analysis_status=str(status),
+        source_analysis_version=_optional_str(result.get("analysis_version")),
+        provider_version=_optional_str(result.get("provider_version")),
+        analyzed_at=_optional_str(result.get("analyzed_at")),
+        track_id=_optional_str(result.get("track_id")),
+        warnings=tuple(str(item) for item in warnings),
+        raw_provider_fields=dict(result),
     )
 
 
 class CanonicalAnalysisService:
-    def __init__(self, preferred_provider: Optional[str] = None) -> None:
+    def __init__(self, preferred_provider: str | None = None) -> None:
         self.provider = select_best_provider(preferred_provider)
 
-    def analyze_path(self, path: str) -> CanonicalMirAnalysis:
+    def analyze_path(self, path: str) -> CanonicalAnalysisResult:
         raw = self.provider.analyze(path)
         return canonicalize_provider_result(raw, path=path)

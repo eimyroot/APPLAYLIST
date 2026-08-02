@@ -1,0 +1,153 @@
+Found 151 errors.
+[*] 112 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
+api/core/logging.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+api/core/logging_setup.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+api/middleware/rate_limit.py:16:21: UP006 [*] Use `collections.defaultdict` instead of `DefaultDict` for type annotation
+api/middleware/rate_limit.py:16:38: UP006 [*] Use `collections.deque` instead of `Deque` for type annotation
+api/middleware/rate_limit.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+api/middleware/rate_limit.py:5:1: UP035 `typing.DefaultDict` is deprecated, use `collections.defaultdict` instead
+api/middleware/rate_limit.py:5:1: UP035 `typing.Deque` is deprecated, use `collections.deque` instead
+api/middleware/request_hardening.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+api/middleware/request_hardening.py:28:16: UP041 [*] Replace aliased errors with `TimeoutError`
+api/middleware/security_middleware.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+api/middleware/security_middleware.py:23:16: UP041 [*] Replace aliased errors with `TimeoutError`
+api/routes/pipeline.py:15:12: UP045 [*] Use `X | None` for type annotations
+api/routes/pipeline.py:16:14: UP045 [*] Use `X | None` for type annotations
+api/routes/pipeline.py:17:14: UP045 [*] Use `X | None` for type annotations
+api/routes/pipeline.py:18:11: UP045 [*] Use `X | None` for type annotations
+api/security/auth_gate.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+api/security/security.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/analysis/benchmark.py:22:20: UP045 [*] Use `X | None` for type annotations
+core/analysis/benchmark.py:23:6: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/benchmark.py:24:11: UP006 [*] Use `list` instead of `List` for type annotation
+core/analysis/benchmark.py:49:101: E501 Line too long (101 > 100)
+core/analysis/benchmark.py:56:20: UP045 [*] Use `X | None` for type annotations
+core/analysis/benchmark.py:58:101: E501 Line too long (104 > 100)
+core/analysis/benchmark.py:7:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
+core/analysis/benchmark.py:7:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/analysis/benchmark.py:7:1: UP035 `typing.List` is deprecated, use `list` instead
+core/analysis/benchmark_compare.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/analysis/benchmark_compare.py:3:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/analysis/benchmark_compare.py:6:40: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/benchmark_compare.py:6:67: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/benchmark_compare.py:6:86: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/provider_errors.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/analysis/provider_essentia.py:26:32: UP045 [*] Use `X | None` for type annotations
+core/analysis/provider_essentia.py:35:41: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/provider_essentia.py:4:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/analysis/provider_feature_flags.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/analysis/provider_orchestrator.py:4:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
+core/analysis/provider_registry.py:19:28: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/provider_registry.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/analysis/provider_registry.py:20:15: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/provider_registry.py:3:1: UP035 [*] Import from `collections.abc` instead: `Callable`
+core/analysis/provider_registry.py:3:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/analysis/provider_registry.py:5:101: E501 Line too long (103 > 100)
+core/analysis/provider_registry.py:8:32: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/provider_registry_bridge.py:4:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
+core/analysis/provider_selection.py:4:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
+core/analysis/providers.py:23:37: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/providers.py:34:101: E501 Line too long (103 > 100)
+core/analysis/providers.py:37:37: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/providers.py:59:101: E501 Line too long (106 > 100)
+core/analysis/providers.py:67:37: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/providers.py:6:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/analysis/providers.py:75:34: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/analysis/providers.py:83:37: UP045 [*] Use `X | None` for type annotations
+core/composer/context_intelligence.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/composer/context_intelligence.py:3:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/composer/context_intelligence.py:3:1: UP035 `typing.List` is deprecated, use `list` instead
+core/composer/context_intelligence.py:3:1: UP035 `typing.Tuple` is deprecated, use `tuple` instead
+core/composer/context_intelligence.py:9:29: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/composer/context_intelligence.py:9:62: UP006 [*] Use `tuple` instead of `Tuple` for type annotation
+core/composer/context_intelligence.py:9:75: UP006 [*] Use `list` instead of `List` for type annotation
+core/composer/context_intelligence.py:9:80: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/composer/energy_context.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/composer/energy_context.py:3:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/composer/energy_context.py:7:35: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/composer/intelligence_hook.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/composer/intelligence_hook.py:3:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/composer/intelligence_hook.py:3:1: UP035 `typing.List` is deprecated, use `list` instead
+core/composer/intelligence_hook.py:3:1: UP035 `typing.Tuple` is deprecated, use `tuple` instead
+core/composer/intelligence_hook.py:7:38: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/composer/intelligence_hook.py:7:75: UP006 [*] Use `tuple` instead of `Tuple` for type annotation
+core/composer/intelligence_hook.py:7:88: UP006 [*] Use `list` instead of `List` for type annotation
+core/composer/intelligence_hook.py:7:93: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/config/scoring_config.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/contracts/jobs.py:10:17: UP045 [*] Use `X | None` for type annotations
+core/contracts/jobs.py:11:19: UP045 [*] Use `X | None` for type annotations
+core/contracts/jobs.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/harmonic.py:4:27: UP045 [*] Use `X | None` for type annotations
+core/harmonic.py:4:45: UP045 [*] Use `X | None` for type annotations
+core/intelligence/track_intelligence.py:14:33: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/intelligence/track_intelligence.py:14:42: UP006 [*] Use `dict` instead of `Dict` for type annotation
+core/intelligence/track_intelligence.py:19:14: UP006 [*] Use `list` instead of `List` for type annotation
+core/intelligence/track_intelligence.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+core/intelligence/track_intelligence.py:4:1: UP035 `typing.Dict` is deprecated, use `dict` instead
+core/intelligence/track_intelligence.py:4:1: UP035 `typing.List` is deprecated, use `list` instead
+data/connection.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+data/models/analysis_record.py:12:10: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:13:21: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:14:10: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:15:12: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:16:14: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:17:13: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:18:18: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:19:23: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:20:21: UP045 [*] Use `X | None` for type annotations
+data/models/analysis_record.py:21:23: UP045 [*] Use `X | None` for type annotations
+data/models/job_record.py:11:17: UP045 [*] Use `X | None` for type annotations
+data/models/job_record.py:12:19: UP045 [*] Use `X | None` for type annotations
+data/models/track_record.py:10:13: UP045 [*] Use `X | None` for type annotations
+data/models/track_record.py:11:12: UP045 [*] Use `X | None` for type annotations
+data/models/track_record.py:12:12: UP045 [*] Use `X | None` for type annotations
+data/models/track_record.py:13:13: UP045 [*] Use `X | None` for type annotations
+data/models/track_record.py:14:23: UP045 [*] Use `X | None` for type annotations
+data/models/track_record.py:15:21: UP045 [*] Use `X | None` for type annotations
+data/models/track_record.py:16:19: UP045 [*] Use `X | None` for type annotations
+data/models/track_record.py:9:12: UP045 [*] Use `X | None` for type annotations
+data/repositories/analysis_repository.py:84:49: UP045 [*] Use `X | None` for type annotations
+data/repositories/job_repository.py:54:41: UP045 [*] Use `X | None` for type annotations
+data/repositories/track_repository.py:67:43: UP045 [*] Use `X | None` for type annotations
+scripts/patch_main_bundle_12.py:46:101: E501 Line too long (116 > 100)
+services/analysis/analyzer.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+services/analysis/analyzer.py:43:101: E501 Line too long (112 > 100)
+services/analysis/analyzer.py:43:68: UP045 [*] Use `X | None` for type annotations
+services/analysis/analyzer.py:43:83: UP045 [*] Use `X | None` for type annotations
+services/analysis/analyzer.py:43:98: UP045 [*] Use `X | None` for type annotations
+services/analysis/analyzer.py:48:101: E501 Line too long (107 > 100)
+services/analysis/analyzer.py:49:101: E501 Line too long (107 > 100)
+services/analysis/analyzer.py:88:9: F841 Local variable `zcr_mean` is assigned to but never used
+services/analysis/provider_analysis_service.py:4:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
+services/export/exporter.py:58:101: E501 Line too long (102 > 100)
+services/export/exporter.py:59:101: E501 Line too long (102 > 100)
+services/export/exporter.py:5:1: UP035 [*] Import from `collections.abc` instead: `Iterable`
+services/intelligence/embeddings.py:21:48: UP006 [*] Use `list` instead of `List` for type annotation
+services/intelligence/embeddings.py:41:26: UP006 [*] Use `list` instead of `List` for type annotation
+services/intelligence/embeddings.py:41:42: UP006 [*] Use `list` instead of `List` for type annotation
+services/intelligence/embeddings.py:45:33: B905 `zip()` without an explicit `strict=` parameter
+services/intelligence/embeddings.py:4:1: UP035 `typing.List` is deprecated, use `list` instead
+services/intelligence/embeddings.py:9:31: UP045 [*] Use `X | None` for type annotations
+services/intelligence/similarity.py:11:32: UP006 [*] Use `list` instead of `List` for type annotation
+services/intelligence/similarity.py:16:62: UP006 [*] Use `list` instead of `List` for type annotation
+services/intelligence/similarity.py:16:67: UP006 [*] Use `tuple` instead of `Tuple` for type annotation
+services/intelligence/similarity.py:28:17: UP006 [*] Use `list` instead of `List` for type annotation
+services/intelligence/similarity.py:28:22: UP006 [*] Use `tuple` instead of `Tuple` for type annotation
+services/intelligence/similarity.py:3:1: UP035 `typing.List` is deprecated, use `list` instead
+services/intelligence/similarity.py:3:1: UP035 `typing.Tuple` is deprecated, use `tuple` instead
+services/structure/structure.py:22:22: UP006 [*] Use `list` instead of `List` for type annotation
+services/structure/structure.py:23:25: UP006 [*] Use `list` instead of `List` for type annotation
+services/structure/structure.py:4:1: UP035 `typing.List` is deprecated, use `list` instead
+tests/test_composer.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+tests/test_intelligence.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+tests/test_repositories.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+tests/test_request_id_exception_path.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+tests/unit/test_provider_baseline_import_safety.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+tests/unit/test_provider_essentia.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+tests/unit/test_provider_import_safety.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+tests/unit/test_provider_registry_metadata.py:1:1: I001 [*] Import block is un-sorted or un-formatted
+tools/governance/validate_change_gate.py:131:101: E501 Line too long (117 > 100)
+tools/governance/validate_change_gate.py:142:101: E501 Line too long (102 > 100)
+tools/governance/validate_change_gate.py:144:101: E501 Line too long (106 > 100)
+tools/governance/validate_change_gate.py:207:101: E501 Line too long (101 > 100)
+tools/governance/validate_change_gate.py:226:101: E501 Line too long (107 > 100)
