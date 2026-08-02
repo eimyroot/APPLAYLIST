@@ -64,3 +64,81 @@ def test_provider_analysis_service_returns_controlled_error_when_no_provider_ava
         )
 
     assert exc_info.value.details.code == "provider_unavailable"
+
+
+class _RecordingCanonicalWriter:
+    def __init__(self) -> None:
+        self.records = []
+
+    def upsert(self, record) -> None:
+        self.records.append(record)
+
+
+class _FailingCanonicalWriter:
+    def upsert(self, record) -> None:
+        from data.repositories.canonical_analysis_repository import (
+            CanonicalAnalysisRepositoryError,
+        )
+
+        raise CanonicalAnalysisRepositoryError(
+            "upsert",
+            "injected test failure",
+        )
+
+
+def test_canonical_writer_disabled_does_not_write(tmp_path: Path) -> None:
+    audio_path = tmp_path / "writer-disabled.wav"
+    _write_test_tone(audio_path)
+    writer = _RecordingCanonicalWriter()
+
+    output = create_provider_analysis_service(
+        env={},
+        canonical_writer=writer,
+    ).analyze(
+        track_id="writer-disabled",
+        path=audio_path,
+        provider_names=["baseline"],
+    )
+
+    assert output.normalized.track_id == "writer-disabled"
+    assert writer.records == []
+
+
+def test_canonical_writer_enabled_writes_once(tmp_path: Path) -> None:
+    audio_path = tmp_path / "writer-enabled.wav"
+    _write_test_tone(audio_path)
+    writer = _RecordingCanonicalWriter()
+
+    output = create_provider_analysis_service(
+        env={"APPLAYLIST_CANONICAL_WRITER_ENABLED": "1"},
+        canonical_writer=writer,
+    ).analyze(
+        track_id="writer-enabled",
+        path=audio_path,
+        provider_names=["baseline"],
+    )
+
+    assert output.normalized.track_id == "writer-enabled"
+    assert len(writer.records) == 1
+    assert writer.records[0].track_id == "writer-enabled"
+
+
+def test_canonical_writer_failure_is_non_authoritative(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    audio_path = tmp_path / "writer-failure.wav"
+    _write_test_tone(audio_path)
+
+    with caplog.at_level("WARNING"):
+        output = create_provider_analysis_service(
+            env={"APPLAYLIST_CANONICAL_WRITER_ENABLED": "1"},
+            canonical_writer=_FailingCanonicalWriter(),
+        ).analyze(
+            track_id="writer-failure",
+            path=audio_path,
+            provider_names=["baseline"],
+        )
+
+    assert output.normalized.track_id == "writer-failure"
+    assert "canonical_writer_shadow_write_failed" in caplog.messages

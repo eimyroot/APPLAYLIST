@@ -41,7 +41,9 @@ class RoutedAnalysisService:
         mode = provider_analysis_mode(env)
 
         if mode == "provider":
-            output = create_provider_analysis_service().analyze(
+            output = create_provider_analysis_service(
+                env=env,
+            ).analyze(
                 track_id=track_id,
                 path=path,
                 requested_provider=requested_provider,
