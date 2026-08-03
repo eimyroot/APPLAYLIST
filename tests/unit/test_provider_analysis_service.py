@@ -110,7 +110,13 @@ def test_canonical_writer_enabled_writes_once(tmp_path: Path) -> None:
     writer = _RecordingCanonicalWriter()
 
     output = create_provider_analysis_service(
-        env={"APPLAYLIST_CANONICAL_WRITER_ENABLED": "1"},
+        env={
+            "APP_ENV": "test",
+            "APPLAYLIST_CANONICAL_WRITER_ENABLED": "1",
+            "APPLAYLIST_CANONICAL_WRITER_RECEIPTS_PATH": str(
+                tmp_path / "writer-success.jsonl"
+            ),
+        },
         canonical_writer=writer,
     ).analyze(
         track_id="writer-enabled",
@@ -132,7 +138,13 @@ def test_canonical_writer_failure_is_non_authoritative(
 
     with caplog.at_level("WARNING"):
         output = create_provider_analysis_service(
-            env={"APPLAYLIST_CANONICAL_WRITER_ENABLED": "1"},
+            env={
+                "APP_ENV": "test",
+                "APPLAYLIST_CANONICAL_WRITER_ENABLED": "1",
+                "APPLAYLIST_CANONICAL_WRITER_RECEIPTS_PATH": str(
+                    tmp_path / "writer-failure.jsonl"
+                ),
+            },
             canonical_writer=_FailingCanonicalWriter(),
         ).analyze(
             track_id="writer-failure",
@@ -142,3 +154,31 @@ def test_canonical_writer_failure_is_non_authoritative(
 
     assert output.normalized.track_id == "writer-failure"
     assert "canonical_writer_shadow_write_failed" in caplog.messages
+
+
+def test_writer_success_creates_jsonl_receipt(tmp_path: Path) -> None:
+    import json
+
+    audio_path = tmp_path / "writer-receipt.wav"
+    receipt_path = tmp_path / "writer-receipts.jsonl"
+    _write_test_tone(audio_path)
+    writer = _RecordingCanonicalWriter()
+
+    create_provider_analysis_service(
+        env={
+            "APP_ENV": "test",
+            "APPLAYLIST_CANONICAL_WRITER_ENABLED": "1",
+            "APPLAYLIST_CANONICAL_WRITER_RECEIPTS_PATH": str(receipt_path),
+        },
+        canonical_writer=writer,
+    ).analyze(
+        track_id="writer-receipt",
+        path=audio_path,
+        provider_names=["baseline"],
+    )
+
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["outcome"] == "succeeded"
+    assert receipt["track_id"] == "writer-receipt"
+    assert receipt["duration_ms"] >= 0
+    assert "path" not in receipt
