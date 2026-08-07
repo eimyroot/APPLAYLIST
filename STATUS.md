@@ -4,7 +4,7 @@ title: APPLAYLIST Current Status
 status: VERIFIED
 owner: APPLAYLIST Engineering
 created: 2026-07-30
-updated: 2026-08-06
+updated: 2026-08-08
 supersedes: null
 related:
   - ROADMAP.md
@@ -22,10 +22,11 @@ related:
 - canonical runtime integration branch: `feature/bundle-26-essentia-real-extraction`;
 - GitHub default branch remains `feature/bundle-0-bootstrap` and is a separate governance item;
 - current merged canonical runtime baseline:
-  `996d38f7a45cf7bafe9b0643fb34004353b717ff`;
-- WB004D implementation commit:
-  `5da9428415a5da58cbc6a8a10308b8e740725912`;
-- PR #90 merged WB004D into the canonical runtime integration branch.
+  `fa77675ec91ffb70a0e699cd377dab6b28975f92`;
+- WB004E implementation commit:
+  `df42b7a054802a3a08b2e2a696feae1b75b82f2b`;
+- PR #93 merged the isolated default-off canonical shadow-reader core into the canonical runtime
+  integration branch.
 
 ## Foundation status
 
@@ -33,7 +34,7 @@ related:
 - EPIC-001 documentation truth: **VERIFIED CLOSED**;
 - EPIC-002 reproducible local engineering baseline: **VERIFIED CLOSED**;
 - EPIC-003 canonical contracts and persistence foundation: **VERIFIED CORE CLOSED**;
-- EPIC-004 canonical persistence rollout: **IN PROGRESS — WB004D MERGED, WB004E NEXT**.
+- EPIC-004 canonical persistence rollout: **IN PROGRESS — WB004E CORE MERGED, WB004F NEXT**.
 
 ## GitHub integration evidence
 
@@ -43,10 +44,12 @@ related:
 - PR #89 merged the bounded non-live writer profile, receipts and documentation reconciliation
   (WB004C);
 - PR #90 merged canonical-versus-legacy comparison receipts (WB004D);
-- WB004D implementation commit:
-  `5da9428415a5da58cbc6a8a10308b8e740725912`;
-- current merged baseline after PR #90:
-  `996d38f7a45cf7bafe9b0643fb34004353b717ff`;
+- PR #92 merged the WB004D post-merge documentation reconciliation;
+- PR #93 merged the isolated default-off canonical shadow-reader core (WB004E);
+- WB004E implementation commit:
+  `df42b7a054802a3a08b2e2a696feae1b75b82f2b`;
+- current merged baseline after PR #93:
+  `fa77675ec91ffb70a0e699cd377dab6b28975f92`;
 - WB004B was verification-only and produced no repository commit.
 
 ## Current runtime authority
@@ -58,6 +61,7 @@ related:
 - bounded non-live activation requires an explicit non-live environment, writer flag and JSONL
   receipt path;
 - canonical-versus-legacy comparison defaults OFF and is bounded by the non-live writer profile;
+- WB004E canonical shadow-reader core: MERGED, DEFAULT-OFF, PRODUCT-PATH NONE;
 - canonical reader activation: NONE;
 - backfill: NONE;
 - runtime authority switch: NONE;
@@ -73,6 +77,10 @@ related:
 - WB004C targeted tests: 12 passed;
 - WB004C full regression: 197 passed;
 - WB004D full regression: 208 passed;
+- WB004E focused tests: 18 passed;
+- WB004E full regression: 226 passed;
+- WB004E AST boundary review: PASS;
+- WB004E existing product-path integration findings: zero;
 - WB004D comparison call site count: exactly one;
 - WB004D canonical repository product-read call site count: zero;
 - doctor, differential Ruff, differential mypy and security gates: PASS;
@@ -86,9 +94,8 @@ related:
 
 ## Known open debt
 
-- WB004E canonical shadow reader audit/design has not started;
-- canonical reader product path is not authorized;
-- representative canonical shadow-read parity evidence does not yet exist;
+- WB004E core is merged, but canonical reader product-path integration remains unauthorized;
+- representative WB004F canonical shadow-read parity evidence does not yet exist;
 - authority switch and controlled cutover are not authorized;
 - repository-wide Ruff/type/security debt remains frozen by differential baselines;
 - source identity is not yet persisted in the current analysis record schema;
@@ -100,5 +107,6 @@ related:
 ## Release status
 
 No release-readiness claim is made. Current work establishes a controlled, observable,
-non-authoritative canonical analysis persistence and comparison path. WB004E, WB004F and WB004G
-remain required before any canonical authority decision.
+non-authoritative canonical analysis persistence, comparison and default-off shadow-reader core.
+WB004F parity evidence and WB004G explicit authority/cutover authorization remain required before
+any canonical authority decision.
