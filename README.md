@@ -180,3 +180,15 @@ Until Bundle 54, do not prioritize cloud accounts, streaming integrations, popul
 - Sidecar lifecycle, authentication and shutdown are proven.
 - Signing, notarization, updater and SBOM evidence exist before external release.
 - Product-facing slices demonstrate the declared user outcome; a green test count alone is not sufficient.
+
+## License and intellectual property
+
+APPLAYLIST is a **commercial proprietary product**. Original APPLAYLIST code and product-specific materials are **All Rights Reserved** unless a specific file explicitly states otherwise.
+
+- Repository visibility: **PRIVATE**
+- Source-code license: [Proprietary / All Rights Reserved](LICENSE.md)
+- Authorized application builds: [End User License Agreement](EULA.md) plus applicable commercial/beta terms
+- Third-party software: [Third-Party Notices and Release Compliance Index](THIRD_PARTY_NOTICES.md)
+- Brand, logos and visual identity: [Trademark and Brand Policy](TRADEMARKS.md)
+
+Third-party dependencies, native libraries, models, datasets, media and other externally owned materials retain their own rights and licenses. The proprietary APPLAYLIST license does not relicense them. A commercial installer remains blocked until the exact shipped dependency set satisfies the distribution gates in the license decision register and third-party notice process.
