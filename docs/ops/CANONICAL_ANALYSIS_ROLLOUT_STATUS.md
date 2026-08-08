@@ -21,8 +21,8 @@ analysis persistence rollout.
 | WB004C | Bounded non-live profile and writer receipts | `097c9aac266d655b55cade4f510173f39429bae6` | PR #89 merged as `af31f0efa2c4e84840703ad3b76e6158dc1e08f2` | VERIFIED MERGED |
 | WB004D | Canonical-versus-legacy comparison receipts | `5da9428415a5da58cbc6a8a10308b8e740725912` | PR #90 merged as `996d38f7a45cf7bafe9b0643fb34004353b717ff` | VERIFIED MERGED |
 | WB004E | Isolated default-off canonical shadow reader core | `df42b7a054802a3a08b2e2a696feae1b75b82f2b` | PR #93 merged as `fa77675ec91ffb70a0e699cd377dab6b28975f92` | VERIFIED MERGED |
-| WB004F | Canonical shadow-read parity campaign | not started | none | NEXT — NOT STARTED |
-| WB004G | Authority decision / controlled cutover design | not started | none | PLANNED |
+| WB004F | Canonical shadow-read parity evidence | local evidence only | read-only audit + closure evidence | VERIFIED INCONCLUSIVE — DATASET NOT REPRODUCIBLE |
+| WB004G | Authority / controlled cutover decision | local decision evidence only | `NO_CUTOVER` | VERIFIED DECISION — NO_CUTOVER |
 
 ## Current publication graph
 
@@ -51,7 +51,16 @@ PR #92
 PR #93
   └─ isolated default-off canonical shadow reader core
        ↓
-NEXT: WB004F representative canonical shadow-read parity campaign
+PR #94
+  └─ WB004E post-merge documentation reconciliation
+       ↓
+WB004F
+  └─ parity audit/attempt closed inconclusive: historical dataset not reproducible
+       ↓
+WB004G
+  └─ explicit NO_CUTOVER decision; legacy authority retained
+       ↓
+NEXT: resume EPIC-006 / DJ-intelligence evidence work
 ```
 
 ## Current authority boundary
@@ -64,6 +73,7 @@ CANONICAL_COMPARISON_DEFAULT=OFF
 CANONICAL_SHADOW_READER_CORE=MERGED_DEFAULT_OFF
 CANONICAL_READER_PRODUCT_PATH=NONE
 CANONICAL_READER_ACTIVATION=NONE
+WB004G_DECISION=NO_CUTOVER
 BACKFILL=NONE
 RUNTIME_AUTHORITY_SWITCH=NONE
 TRANSITION_INTELLIGENCE_ACTIVATION=NONE
@@ -105,6 +115,35 @@ RUNTIME_AUTHORITY_SWITCH=NONE
 BACKFILL=NONE
 ```
 
+## Verified WB004F closure evidence
+
+```text
+LEGACY_ANALYSES=18
+CANONICAL_ANALYSES=0
+INITIAL_OVERLAP=0
+ELIGIBLE_UNIQUE_EXISTING_AUDIO_SOURCES=0
+UNMAPPED_OR_AMBIGUOUS_AUDIO_SOURCES=18
+FAILURE_REASON_NO_UNIQUE_EXISTING_ABSOLUTE_AUDIO_SOURCE=18
+CANONICAL_SEED_EXECUTED=NO
+PARITY_COMPARISON_EXECUTED=NO
+STATUS=VERIFIED_INCONCLUSIVE_DATASET_NOT_REPRODUCIBLE
+REPOSITORY_UNCHANGED=VERIFIED
+GIT_REFS_UNCHANGED=VERIFIED
+LIVE_DB_UNCHANGED=VERIFIED
+```
+
+## Verified WB004G decision
+
+```text
+DECISION=NO_CUTOVER
+CANONICAL_READER_ACTIVATION=NONE
+LEGACY_ANALYSIS_AUTHORITY=ACTIVE
+RUNTIME_AUTHORITY_SWITCH=NONE
+BACKFILL=NONE
+PRODUCT_PATH_INTEGRATION=NONE
+REOPEN_CONDITION=FUTURE_BOUNDED_REPRODUCIBLE_DATASET_WITH_STABLE_SOURCE_IDENTITY
+```
+
 ## Local evidence references
 
 Evidence directories remain local and are not product runtime inputs:
@@ -118,16 +157,21 @@ Evidence directories remain local and are not product runtime inputs:
 - `APPLAYLIST_WB004D_POSTMERGE_DOC_RECONCILIATION_AUDIT_20260806T023117Z`;
 - `APPLAYLIST_WB004E_CANONICAL_SHADOW_READER_AUDIT_DESIGN_20260806T191133Z`;
 - `APPLAYLIST_WB004E_CANONICAL_SHADOW_READER_CORE_IMPLEMENTATION_20260806T193631Z`;
-- `APPLAYLIST_WB004E_CANONICAL_SHADOW_READER_CORE_PR93_REVIEW_RESUME_V3_20260806T200234Z`.
+- `APPLAYLIST_WB004E_CANONICAL_SHADOW_READER_CORE_PR93_REVIEW_RESUME_V3_20260806T200234Z`;
+- `APPLAYLIST_WB004F_CANONICAL_SHADOW_READ_PARITY_AUDIT_DESIGN_20260808T002912Z`;
+- `APPLAYLIST_WB004F_DISPOSABLE_PARITY_CAMPAIGN_20260808T005720Z`;
+- `APPLAYLIST_WB004F_WB004G_NO_CUTOVER_CLOSURE_20260808T082232Z`.
 
 Each evidence directory contains a `FINAL_RECEIPT.txt` and `SHA256SUMS.txt` when the producing
 bundle reached closure.
 
 ## Next gates
 
-1. Reconcile and publish this documentation-only WB004E post-merge update.
-2. Run WB004F as a separate representative canonical shadow-read parity campaign.
-3. Keep the merged WB004E reader core disconnected from product request paths during WB004F.
-4. Make no authority decision before representative WB004F evidence and WB004G authorization.
-5. Keep canonical reader activation, backfill and runtime authority switch disabled.
-6. Keep WB006D on hold as an independent EPIC-006 work item.
+1. Publish this documentation-only WB004F/WB004G closure reconciliation.
+2. Resume EPIC-006 with independent downbeat evidence; keep `WB006D=HOLD` until separately reviewed
+   and authorized.
+3. Continue phrase/structure, vocal/bass collision and composer intelligence only through their
+   separately authorized evidence gates.
+4. Keep canonical reader activation, backfill and runtime authority switch disabled.
+5. Reopen canonical parity/cutover evaluation only with a future bounded dataset that has stable
+   source identity and reproducible canonical-versus-legacy overlap evidence.

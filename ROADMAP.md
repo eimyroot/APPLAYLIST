@@ -23,7 +23,7 @@ current planning authority.
 | EPIC-001 | Foundation and documentation freeze | VERIFIED CLOSED |
 | EPIC-002 | Reproducible local engineering baseline | VERIFIED CLOSED |
 | EPIC-003 | Canonical analysis contracts and persistence foundation | VERIFIED CORE CLOSED — schema/repository/writer foundation merged |
-| EPIC-004 | Canonical persistence rollout | IN PROGRESS — WB004E core merged; WB004F parity campaign next |
+| EPIC-004 | Canonical persistence rollout | VERIFIED CLOSED — WB004F inconclusive; WB004G NO_CUTOVER; legacy authority retained |
 | EPIC-005 | Transition Intelligence foundation | IMPLEMENTED / runtime activation NONE |
 | EPIC-006 | Beat, downbeat, phrase and structure intelligence | IN PROGRESS — WB006C beat-grid shadow merged; WB006D HOLD |
 | EPIC-007 | Vocal and bass collision intelligence | PLANNED |
@@ -54,18 +54,23 @@ current planning authority.
 11. WB004E — isolated default-off canonical shadow reader core;
     implementation commit `df42b7a054802a3a08b2e2a696feae1b75b82f2b`, PR #93 merged as
     `fa77675ec91ffb70a0e699cd377dab6b28975f92`; product-path activation remains NONE.
+12. WB004F — representative parity audit/campaign attempt closed
+    `VERIFIED_INCONCLUSIVE_DATASET_NOT_REPRODUCIBLE`: 18 legacy analyses, zero uniquely mapped
+    existing audio sources, canonical seed not executed and parity comparison not executed.
+13. WB004G — explicit authority decision: `NO_CUTOVER`; legacy analysis remains authoritative,
+    canonical reader activation remains NONE and runtime authority switch remains NONE.
 
 ## Immediate sequence
 
-1. WB004F — representative canonical shadow-read parity campaign.
-2. Classify and quantify canonical-versus-legacy read mismatches using bounded non-live evidence.
-3. WB004G — explicit authority decision and controlled cutover design.
-4. Make no authority switch before WB004F evidence and WB004G authorization.
-5. Keep the merged WB004E reader core disconnected from product request paths until separately authorized.
-6. Resume EPIC-006 with independent downbeat evidence.
-7. Add phrase/structure acceptance only after downbeat evidence is trustworthy.
-8. Continue to vocal/bass collision intelligence.
-9. Integrate with composer in shadow mode before any opt-in runtime activation.
+1. Resume EPIC-006 with independent downbeat evidence while `WB006D=HOLD` remains in force until
+   separately reviewed and authorized.
+2. Add phrase/structure acceptance only after downbeat evidence is trustworthy.
+3. Continue to EPIC-007 vocal/bass collision intelligence.
+4. Integrate EPIC-008 composer intelligence in shadow mode before any opt-in runtime activation.
+5. Keep canonical persistence non-authoritative: canonical reader activation NONE, backfill NONE and
+   runtime authority switch NONE.
+6. Reopen WB004F/WB004G only when a future bounded dataset provides stable audio-source identity and
+   reproducible canonical-versus-legacy overlap evidence.
 
 ## EPIC-004 rollout sequence
 
@@ -75,15 +80,16 @@ WB004B  Disposable writer activation verification               VERIFIED
 WB004C  Bounded non-live writer + observability receipts        VERIFIED MERGED
 WB004D  Canonical-versus-legacy comparison receipts             VERIFIED MERGED
 WB004E  Canonical shadow reader core                            VERIFIED MERGED
-WB004F  Canonical shadow-read parity campaign                   NEXT — NOT STARTED
-WB004G  Authority decision / controlled cutover design          PLANNED
+WB004F  Canonical shadow-read parity evidence                   VERIFIED INCONCLUSIVE — DATASET NOT REPRODUCIBLE
+WB004G  Authority / controlled cutover decision                 VERIFIED DECISION — NO_CUTOVER
 ```
 
 ## Activation invariant
 
 Legacy analysis remains authoritative. Canonical persistence remains non-authoritative in product
 runtime. The WB004E canonical shadow-reader core is merged but is not connected to a product request
-path and is not activated. Backfill, authority switch, Transition Intelligence runtime activation,
-and WB006D remain disabled until separately authorized and verified.
+path and is not activated. WB004G explicitly concluded `NO_CUTOVER` because the historical WB004F
+dataset could not produce reproducible parity evidence. Backfill, authority switch, Transition
+Intelligence runtime activation, and WB006D remain disabled until separately authorized and verified.
 
 GitHub Actions are not an authoritative gate for the current local-first work blocks.
