@@ -22,11 +22,13 @@ related:
 - canonical runtime integration branch: `feature/bundle-26-essentia-real-extraction`;
 - GitHub default branch remains `feature/bundle-0-bootstrap` and is a separate governance item;
 - current merged canonical runtime baseline:
-  `fa77675ec91ffb70a0e699cd377dab6b28975f92`;
+  `4551c1f395d1087c4f7183daeb6d92bfec30f389`;
 - WB004E implementation commit:
   `df42b7a054802a3a08b2e2a696feae1b75b82f2b`;
 - PR #93 merged the isolated default-off canonical shadow-reader core into the canonical runtime
-  integration branch.
+  integration branch;
+- PR #94 merged the WB004E post-merge documentation reconciliation as canonical baseline
+  `4551c1f395d1087c4f7183daeb6d92bfec30f389`.
 
 ## Foundation status
 
@@ -34,7 +36,7 @@ related:
 - EPIC-001 documentation truth: **VERIFIED CLOSED**;
 - EPIC-002 reproducible local engineering baseline: **VERIFIED CLOSED**;
 - EPIC-003 canonical contracts and persistence foundation: **VERIFIED CORE CLOSED**;
-- EPIC-004 canonical persistence rollout: **IN PROGRESS — WB004E CORE MERGED, WB004F NEXT**.
+- EPIC-004 canonical persistence rollout: **VERIFIED CLOSED — WB004F INCONCLUSIVE, WB004G NO_CUTOVER**.
 
 ## GitHub integration evidence
 
@@ -46,10 +48,11 @@ related:
 - PR #90 merged canonical-versus-legacy comparison receipts (WB004D);
 - PR #92 merged the WB004D post-merge documentation reconciliation;
 - PR #93 merged the isolated default-off canonical shadow-reader core (WB004E);
+- PR #94 merged the WB004E post-merge documentation reconciliation;
 - WB004E implementation commit:
   `df42b7a054802a3a08b2e2a696feae1b75b82f2b`;
-- current merged baseline after PR #93:
-  `fa77675ec91ffb70a0e699cd377dab6b28975f92`;
+- current merged baseline after PR #94:
+  `4551c1f395d1087c4f7183daeb6d92bfec30f389`;
 - WB004B was verification-only and produced no repository commit.
 
 ## Current runtime authority
@@ -63,6 +66,7 @@ related:
 - canonical-versus-legacy comparison defaults OFF and is bounded by the non-live writer profile;
 - WB004E canonical shadow-reader core: MERGED, DEFAULT-OFF, PRODUCT-PATH NONE;
 - canonical reader activation: NONE;
+- WB004G authority decision: `NO_CUTOVER`;
 - backfill: NONE;
 - runtime authority switch: NONE;
 - `TRANSITION_INTELLIGENCE_ACTIVATION=NONE`;
@@ -81,6 +85,12 @@ related:
 - WB004E full regression: 226 passed;
 - WB004E AST boundary review: PASS;
 - WB004E existing product-path integration findings: zero;
+- WB004F read-only audit: 18 legacy analyses, 0 canonical analyses and 0 overlap;
+- WB004F reproducibility attempt: 0 uniquely mapped existing audio sources out of 18 legacy
+  analyses, so canonical seed and parity comparison were not executed;
+- WB004F closure: `VERIFIED_INCONCLUSIVE_DATASET_NOT_REPRODUCIBLE`;
+- WB004G decision: `NO_CUTOVER`;
+- WB004F/WB004G closure verified repository, Git refs, local HEAD and live DB unchanged;
 - WB004D comparison call site count: exactly one;
 - WB004D canonical repository product-read call site count: zero;
 - doctor, differential Ruff, differential mypy and security gates: PASS;
@@ -94,9 +104,11 @@ related:
 
 ## Known open debt
 
-- WB004E core is merged, but canonical reader product-path integration remains unauthorized;
-- representative WB004F canonical shadow-read parity evidence does not yet exist;
-- authority switch and controlled cutover are not authorized;
+- canonical reader product-path integration remains unauthorized and inactive;
+- the historical 18-row legacy dataset is not reproducible from provable current audio-source
+  identity, so WB004F produced no parity result and is closed inconclusive;
+- WB004G explicitly decided `NO_CUTOVER`; canonical authority can be reconsidered only with a future
+  bounded dataset that has stable source identity and reproducible overlap evidence;
 - repository-wide Ruff/type/security debt remains frozen by differential baselines;
 - source identity is not yet persisted in the current analysis record schema;
 - beat/tempo confidence is not calibrated against licensed real-world benchmark data;
@@ -106,7 +118,7 @@ related:
 
 ## Release status
 
-No release-readiness claim is made. Current work establishes a controlled, observable,
-non-authoritative canonical analysis persistence, comparison and default-off shadow-reader core.
-WB004F parity evidence and WB004G explicit authority/cutover authorization remain required before
-any canonical authority decision.
+No release-readiness claim is made. Canonical analysis persistence remains controlled, observable
+and non-authoritative. WB004F closed inconclusive because the historical dataset was not
+reproducible, and WB004G therefore decided `NO_CUTOVER`. Legacy analysis remains authoritative while
+the active engineering focus returns to DJ intelligence.
