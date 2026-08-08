@@ -4,7 +4,7 @@ title: APPLAYLIST Product Roadmap
 status: ACCEPTED
 owner: APPLAYLIST Engineering
 created: 2026-07-30
-updated: 2026-08-06
+updated: 2026-08-08
 supersedes:
   - docs/BUNDLE_PLAN.md
 related:
@@ -23,7 +23,7 @@ current planning authority.
 | EPIC-001 | Foundation and documentation freeze | VERIFIED CLOSED |
 | EPIC-002 | Reproducible local engineering baseline | VERIFIED CLOSED |
 | EPIC-003 | Canonical analysis contracts and persistence foundation | VERIFIED CORE CLOSED — schema/repository/writer foundation merged |
-| EPIC-004 | Canonical persistence rollout | IN PROGRESS — WB004D merged; WB004E read-only audit/design next |
+| EPIC-004 | Canonical persistence rollout | IN PROGRESS — WB004E core merged; WB004F parity campaign next |
 | EPIC-005 | Transition Intelligence foundation | IMPLEMENTED / runtime activation NONE |
 | EPIC-006 | Beat, downbeat, phrase and structure intelligence | IN PROGRESS — WB006C beat-grid shadow merged; WB006D HOLD |
 | EPIC-007 | Vocal and bass collision intelligence | PLANNED |
@@ -51,14 +51,17 @@ current planning authority.
 10. WB004D — canonical-versus-legacy comparison receipts and mismatch classification;
     implementation commit `5da9428415a5da58cbc6a8a10308b8e740725912`, PR #90 merged as
     `996d38f7a45cf7bafe9b0643fb34004353b717ff`.
+11. WB004E — isolated default-off canonical shadow reader core;
+    implementation commit `df42b7a054802a3a08b2e2a696feae1b75b82f2b`, PR #93 merged as
+    `fa77675ec91ffb70a0e699cd377dab6b28975f92`; product-path activation remains NONE.
 
 ## Immediate sequence
 
-1. WB004E — canonical shadow reader read-only audit/design and disposable verification plan.
-2. Implement WB004E only after separate authorization.
-3. WB004F — representative canonical shadow-read parity campaign.
-4. WB004G — explicit authority decision and controlled cutover design.
-5. Make no authority switch before WB004F evidence and WB004G authorization.
+1. WB004F — representative canonical shadow-read parity campaign.
+2. Classify and quantify canonical-versus-legacy read mismatches using bounded non-live evidence.
+3. WB004G — explicit authority decision and controlled cutover design.
+4. Make no authority switch before WB004F evidence and WB004G authorization.
+5. Keep the merged WB004E reader core disconnected from product request paths until separately authorized.
 6. Resume EPIC-006 with independent downbeat evidence.
 7. Add phrase/structure acceptance only after downbeat evidence is trustworthy.
 8. Continue to vocal/bass collision intelligence.
@@ -71,15 +74,16 @@ WB004A  Default-off canonical shadow writer                     VERIFIED MERGED
 WB004B  Disposable writer activation verification               VERIFIED
 WB004C  Bounded non-live writer + observability receipts        VERIFIED MERGED
 WB004D  Canonical-versus-legacy comparison receipts             VERIFIED MERGED
-WB004E  Canonical shadow reader design + verification           NEXT — NOT STARTED
-WB004F  Canonical shadow-read parity campaign                   PLANNED
+WB004E  Canonical shadow reader core                            VERIFIED MERGED
+WB004F  Canonical shadow-read parity campaign                   NEXT — NOT STARTED
 WB004G  Authority decision / controlled cutover design          PLANNED
 ```
 
 ## Activation invariant
 
-Legacy analysis remains authoritative. Canonical persistence is non-authoritative and disabled in
-production. The canonical reader, backfill, authority switch, Transition Intelligence runtime
-activation, and WB006D remain disabled until separately authorized and verified.
+Legacy analysis remains authoritative. Canonical persistence remains non-authoritative in product
+runtime. The WB004E canonical shadow-reader core is merged but is not connected to a product request
+path and is not activated. Backfill, authority switch, Transition Intelligence runtime activation,
+and WB006D remain disabled until separately authorized and verified.
 
 GitHub Actions are not an authoritative gate for the current local-first work blocks.
