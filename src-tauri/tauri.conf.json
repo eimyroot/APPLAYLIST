@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "APPLAYLIST",
+  "version": "0.1.0",
+  "identifier": "com.applaylist.desktop",
+  "build": {
+    "frontendDist": "../desktop/host-proof"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "APPLAYLIST",
+        "width": 900,
+        "height": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+      "capabilities": [
+        "main-library-root"
+      ]
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "resources": {
+      "../artifacts/desktop-sidecar/dist/applaylist-sidecar/": "applaylist-sidecar/"
+    }
+  }
+}

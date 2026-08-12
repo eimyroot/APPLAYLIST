@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import time
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -14,12 +14,16 @@ import pytest
 
 from services.desktop.sidecar import PROTOCOL_VERSION, read_startup_envelope
 
-
 SECRET = "S" * 48
 NONCE = "N" * 48
 
 
-def _start_sidecar(*, secret: str = SECRET, nonce: str = NONCE) -> tuple[subprocess.Popen[str], dict]:
+def _start_sidecar(
+    *,
+    secret: str = SECRET,
+    nonce: str = NONCE,
+    env: dict[str, str] | None = None,
+) -> tuple[subprocess.Popen[str], dict]:
     process = subprocess.Popen(
         [sys.executable, "-m", "services.desktop.sidecar"],
         cwd=Path(__file__).resolve().parents[1],
@@ -29,7 +33,7 @@ def _start_sidecar(*, secret: str = SECRET, nonce: str = NONCE) -> tuple[subproc
         text=True,
         encoding="utf-8",
         bufsize=1,
-        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        env={**os.environ, **(env or {}), "PYTHONUNBUFFERED": "1"},
     )
     assert process.stdin is not None
     assert process.stdout is not None
@@ -57,14 +61,17 @@ def _request(
     nonce: str = NONCE,
     body: bytes | None = None,
 ) -> tuple[int, dict]:
+    headers = {
+        "X-APPLAYLIST-Sidecar-Secret": secret,
+        "X-APPLAYLIST-Readiness-Nonce": nonce,
+    }
+    if body is not None:
+        headers["Content-Type"] = "application/json"
     request = Request(
         f"http://127.0.0.1:{ready['port']}{path}",
         data=body,
         method=method,
-        headers={
-            "X-APPLAYLIST-Sidecar-Secret": secret,
-            "X-APPLAYLIST-Readiness-Nonce": nonce,
-        },
+        headers=headers,
     )
     try:
         with urlopen(request, timeout=3) as response:  # noqa: S310 - fixed loopback URL
@@ -76,10 +83,10 @@ def _request(
 def _finish(process: subprocess.Popen[str], *, timeout: float = 5.0) -> tuple[str, str]:
     try:
         stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         process.kill()
         stdout, stderr = process.communicate(timeout=timeout)
-        raise AssertionError("sidecar did not terminate within timeout")
+        raise AssertionError("sidecar did not terminate within timeout") from exc
     return stdout, stderr
 
 
@@ -222,6 +229,72 @@ def test_unknown_route_and_method_do_not_expose_server_details() -> None:
         while process.poll() is None and time.monotonic() < deadline:
             time.sleep(0.02)
         assert process.poll() == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            _finish(process)
+
+def test_authenticated_library_import_is_safe_and_fail_closed(tmp_path: Path) -> None:
+    root = (tmp_path / "Music").resolve()
+    root.mkdir()
+    (root / "notes.txt").write_text("not audio", encoding="utf-8")
+    database = (tmp_path / "sidecar-import.db").resolve()
+    process, ready = _start_sidecar(env={"DATABASE_URL": f"sqlite:///{database}"})
+    try:
+        request_body = json.dumps({"folder": str(root)}, separators=(",", ":")).encode("utf-8")
+
+        status, payload = _request(
+            ready,
+            method="POST",
+            path="/v1/library/import",
+            secret="X" * 48,
+            body=request_body,
+        )
+        assert status == 401
+        assert payload == {"error": "unauthorized"}
+
+        status, payload = _request(
+            ready,
+            method="POST",
+            path="/v1/library/import",
+            body=json.dumps({"folder": "relative/path"}).encode("utf-8"),
+        )
+        assert status == 400
+        assert payload == {"error": "invalid_library_root"}
+
+        status, payload = _request(
+            ready,
+            method="POST",
+            path="/v1/library/import",
+            body=request_body,
+        )
+        assert status == 200
+        assert payload["folder_name"] == "Music"
+        assert payload["tracks"] == []
+        assert payload["counts"] == {
+            "discovered_entries": 1,
+            "accepted": 0,
+            "imported": 0,
+            "persisted": 0,
+        }
+        encoded = json.dumps(payload, sort_keys=True)
+        assert str(root) not in encoded
+        assert str((root / "notes.txt").resolve()) not in encoded
+        assert payload["issues"] == [
+            {
+                "stage": "scan_skipped",
+                "code": "unsupported_extension",
+                "file_name": "notes.txt",
+            }
+        ]
+
+        status, payload = _request(ready, method="POST", path="/v1/shutdown")
+        assert status == 202
+        assert payload == {"status": "shutting_down"}
+        stdout, stderr = _finish(process)
+        assert process.returncode == 0
+        assert SECRET not in stdout + stderr
+        assert NONCE not in stdout + stderr
     finally:
         if process.poll() is None:
             process.kill()

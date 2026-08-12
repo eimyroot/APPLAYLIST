@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import secrets
 import signal
 import sys
 import threading
@@ -12,10 +11,16 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, TextIO
 
+from services.desktop.library_import import (
+    DesktopLibraryImportError,
+    DesktopLibraryImportService,
+)
 
 PROTOCOL_VERSION = "applaylist-sidecar-v1"
 MAX_STARTUP_BYTES = 8_192
 MAX_HEADER_BYTES = 512
+MAX_IMPORT_REQUEST_BYTES = 16_384
+MAX_LIBRARY_ROOT_CHARS = 4_096
 SECRET_HEADER = "X-APPLAYLIST-Sidecar-Secret"
 NONCE_HEADER = "X-APPLAYLIST-Readiness-Nonce"
 
@@ -103,6 +108,8 @@ class _SidecarHTTPServer(ThreadingHTTPServer):
     def __init__(self, startup: SidecarStartup) -> None:
         self.startup = startup
         self.shutdown_requested = threading.Event()
+        self.library_import = DesktopLibraryImportService()
+        self.library_import_lock = threading.Lock()
         super().__init__(("127.0.0.1", 0), _SidecarRequestHandler)
 
 
@@ -135,6 +142,9 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self) -> None:  # noqa: N802
+        if self.path == "/v1/library/import":
+            self._handle_library_import()
+            return
         if self.path != "/v1/shutdown":
             self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
@@ -152,6 +162,55 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
             name="applaylist-sidecar-shutdown",
             daemon=True,
         ).start()
+
+    def _handle_library_import(self) -> None:
+        if not self._authorized():
+            self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
+            return
+        payload = self._read_import_payload()
+        if payload is None:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_library_import_request"})
+            return
+        folder = payload.get("folder")
+        if not isinstance(folder, str) or not folder or len(folder) > MAX_LIBRARY_ROOT_CHARS:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_library_import_request"})
+            return
+        try:
+            with self.sidecar_server.library_import_lock:
+                result = self.sidecar_server.library_import.import_folder(folder)
+        except DesktopLibraryImportError:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_library_root"})
+            return
+        except Exception:
+            self._write_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "library_import_failed"})
+            return
+        self._write_json(HTTPStatus.OK, result.to_payload())
+
+    def _read_import_payload(self) -> dict[str, object] | None:
+        if self.headers.get("Transfer-Encoding") is not None:
+            return None
+        content_type = self.headers.get("Content-Type", "")
+        if content_type.split(";", 1)[0].strip().lower() != "application/json":
+            return None
+        raw_length = self.headers.get("Content-Length")
+        if raw_length is None:
+            return None
+        try:
+            length = int(raw_length)
+        except ValueError:
+            return None
+        if length <= 0 or length > MAX_IMPORT_REQUEST_BYTES:
+            return None
+        body = self.rfile.read(length)
+        if len(body) != length:
+            return None
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        if not isinstance(payload, dict) or set(payload) != {"folder"}:
+            return None
+        return payload
 
     def do_PUT(self) -> None:  # noqa: N802
         self._method_not_allowed()
