@@ -118,7 +118,7 @@ impl SidecarBridge {
             &secret,
             &nonce,
             Some(&request),
-        IMPORT_TIMEOUT,
+            IMPORT_TIMEOUT,
         )?;
         if status != 200 {
             return Err(SidecarBridgeError::import_rejected());
@@ -372,7 +372,15 @@ impl SidecarProcess {
     }
 
     fn shutdown(&mut self, port: u16, secret: &str, nonce: &str) {
-        let _ = request_json(port, "POST", "/v1/shutdown", secret, nonce, Some(&[]), HTTP_TIMEOUT);
+        let _ = request_json(
+            port,
+            "POST",
+            "/v1/shutdown",
+            secret,
+            nonce,
+            Some(&[]),
+            HTTP_TIMEOUT,
+        );
         let deadline = Instant::now() + SHUTDOWN_TIMEOUT;
         while Instant::now() < deadline {
             match self.child.try_wait() {
@@ -415,7 +423,8 @@ fn validate_ready(ready: &SidecarReady, nonce: &str) -> Result<(), SidecarBridge
 }
 
 fn verify_health(port: u16, secret: &str, nonce: &str) -> Result<(), SidecarBridgeError> {
-    let (status, body) = request_json(port, "GET", "/v1/health", secret, nonce, None, HTTP_TIMEOUT)?;
+    let (status, body) =
+        request_json(port, "GET", "/v1/health", secret, nonce, None, HTTP_TIMEOUT)?;
     if status == 401 {
         return Err(SidecarBridgeError::authentication_failed());
     }
@@ -440,7 +449,7 @@ fn request_json(
     secret: &str,
     nonce: &str,
     body: Option<&[u8]>,
-read_timeout: Duration,
+    read_timeout: Duration,
 ) -> Result<(u16, Vec<u8>), SidecarBridgeError> {
     let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
     let mut stream = TcpStream::connect_timeout(&address, HTTP_TIMEOUT)
