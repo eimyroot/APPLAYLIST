@@ -92,7 +92,7 @@ impl ImportJobRegistry {
 
         let worker_snapshot = Arc::clone(&snapshot);
         let worker_cancel = Arc::clone(&cancel_requested);
-        thread::Builder::new()
+        let spawn_result = thread::Builder::new()
             .name("applaylist-import-job".to_owned())
             .spawn(move || {
                 let progress_snapshot = Arc::clone(&worker_snapshot);
@@ -127,8 +127,18 @@ impl ImportJobRegistry {
                         }
                     }
                 }
-            })
-            .map_err(|_| import_task_failed())?;
+            });
+
+        if spawn_result.is_err() {
+            if let Ok(mut failed_snapshot) = snapshot.lock() {
+                failed_snapshot.state = "failed".to_owned();
+                failed_snapshot.phase = "finalizing".to_owned();
+                failed_snapshot.terminal = true;
+                failed_snapshot.result = None;
+                failed_snapshot.error_code = Some("desktop_library_import_task_failed".to_owned());
+            }
+            return Err(import_task_failed());
+        }
 
         snapshot
             .lock()
@@ -181,7 +191,14 @@ fn update_progress(
     if current.terminal {
         return;
     }
-    if current.state != "cancelling" || progress.state == "cancelling" {
+
+    let sidecar_terminal = matches!(
+        progress.state.as_str(),
+        "succeeded" | "cancelled" | "failed"
+    );
+    if !sidecar_terminal
+        && (current.state != "cancelling" || progress.state == "cancelling")
+    {
         current.state = progress.state;
     }
     current.phase = progress.phase;
@@ -340,5 +357,31 @@ mod tests {
         let snapshot = registry.cancel(&id).expect("terminal cancel is idempotent");
         assert_eq!(snapshot.state, "succeeded");
         assert!(snapshot.terminal);
+    }
+
+    #[test]
+    fn terminal_sidecar_progress_is_not_published_before_atomic_final_result() {
+        let id = format!("{IMPORT_JOB_PREFIX}{}", Uuid::new_v4().simple());
+        let snapshot = Arc::new(Mutex::new(DesktopImportJobSnapshotDto::new(id)));
+        let progress = SidecarImportProgressDto {
+            state: "succeeded".to_owned(),
+            phase: "finalizing".to_owned(),
+            counts: DesktopLibraryCountsDto {
+                discovered_entries: 4,
+                accepted: 3,
+                imported: 2,
+                persisted: 2,
+            },
+        };
+
+        update_progress(&snapshot, progress);
+
+        let current = snapshot.lock().expect("read test snapshot");
+        assert_eq!(current.state, "running");
+        assert_eq!(current.phase, "finalizing");
+        assert_eq!(current.counts.discovered_entries, 4);
+        assert_eq!(current.counts.persisted, 2);
+        assert!(!current.terminal);
+        assert!(current.result.is_none());
     }
 }
