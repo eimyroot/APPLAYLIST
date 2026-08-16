@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import threading
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 from core.analysis.job_contract import AnalysisJobSnapshot, TERMINAL_ANALYSIS_JOB_STATES
 from services.analysis.batch_runner import AnalysisBatchRunner
@@ -179,6 +178,17 @@ class DesktopAnalysisTransport:
     def _run_job(self, job_id: str) -> None:
         try:
             AnalysisBatchRunner(job_service=self._jobs).run(job_id)
+        except Exception:
+            try:
+                current = self._jobs.get_job(job_id)
+                if current is not None and current.status not in TERMINAL_ANALYSIS_JOB_STATES:
+                    self._jobs.fail_job(
+                        job_id,
+                        error_code="analysis_job_transport_failed",
+                        error_detail="The analysis job stopped safely inside the desktop transport.",
+                    )
+            except Exception:
+                pass
         finally:
             with self._lock:
                 if self._active_job_id == job_id:
