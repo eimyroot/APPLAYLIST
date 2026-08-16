@@ -185,7 +185,7 @@ Until Bundle 54, do not prioritize cloud accounts, streaming integrations, popul
 
 APPLAYLIST is a **commercial proprietary product**. Original APPLAYLIST code and product-specific materials are **All Rights Reserved** unless a specific file explicitly states otherwise.
 
-- Repository visibility: **PRIVATE**
+- Repository visibility: **PUBLIC**
 - Source-code license: [Proprietary / All Rights Reserved](LICENSE.md)
 - Authorized application builds: [End User License Agreement](EULA.md) plus applicable commercial/beta terms
 - Third-party software: [Third-Party Notices and Release Compliance Index](THIRD_PARTY_NOTICES.md)
