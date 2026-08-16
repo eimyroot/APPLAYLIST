@@ -69,6 +69,7 @@
             <caption>Imported library tracks</caption>
             <thead>
               <tr>
+                <th scope="col">Analyze</th>
                 <th scope="col">Title</th>
                 <th scope="col">Artist</th>
                 <th scope="col">Format</th>
@@ -86,6 +87,99 @@
         <h3 id="import-issues-heading">Import issues</h3>
         <p>Only bounded issue codes and safe file names are shown.</p>
         <ul id="issue-list"></ul>
+      </section>
+    </section>
+
+    <section id="analysis" aria-labelledby="analysis-heading" aria-busy="false" hidden>
+      <h2 id="analysis-heading">Analysis &amp; Inspector</h2>
+      <p>Analyze selected imported tracks, inspect persisted evidence, apply explicit corrections, or request re-analysis.</p>
+
+      <div class="actions">
+        <button id="analyze-selected" type="button">Analyze selected</button>
+        <button id="cancel-analysis" type="button" disabled>Cancel analysis</button>
+        <button id="refresh-inspector" type="button">Refresh inspector</button>
+        <label for="inspector-filter">Filter</label>
+        <select id="inspector-filter">
+          <option value="all">All</option>
+          <option value="uncertain">Uncertain</option>
+          <option value="failed">Failed</option>
+          <option value="corrected">Corrected</option>
+        </select>
+      </div>
+
+      <p id="analysis-status" class="status" role="status" aria-live="polite">Select imported tracks to analyze.</p>
+
+      <section id="analysis-progress" aria-labelledby="analysis-progress-heading" hidden>
+        <h3 id="analysis-progress-heading">Analysis progress</h3>
+        <dl class="summary-grid">
+          <dt>State</dt>
+          <dd id="analysis-progress-state">—</dd>
+          <dt>Selected</dt>
+          <dd id="analysis-progress-selected">0</dd>
+          <dt>Completed</dt>
+          <dd id="analysis-progress-completed">0</dd>
+          <dt>Succeeded</dt>
+          <dd id="analysis-progress-succeeded">0</dd>
+          <dt>Failed</dt>
+          <dd id="analysis-progress-failed">0</dd>
+          <dt>Uncertain</dt>
+          <dd id="analysis-progress-uncertain">0</dd>
+        </dl>
+      </section>
+
+      <section id="analysis-inspector" aria-labelledby="analysis-inspector-heading">
+        <h3 id="analysis-inspector-heading">Inspector</h3>
+        <p id="inspector-empty" class="empty-state">No analysis evidence yet.</p>
+        <div class="table-wrap">
+          <table id="inspector-table" hidden>
+            <caption>Persisted analysis evidence</caption>
+            <thead>
+              <tr>
+                <th scope="col">Title</th>
+                <th scope="col">Artist</th>
+                <th scope="col">Status</th>
+                <th scope="col">BPM</th>
+                <th scope="col">Key</th>
+                <th scope="col">Energy</th>
+                <th scope="col">Source</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody id="inspector-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="analysis-detail" aria-labelledby="analysis-detail-heading" hidden>
+        <h3 id="analysis-detail-heading">Analysis detail</h3>
+        <dl class="summary-grid">
+          <dt>Track</dt><dd id="detail-track">—</dd>
+          <dt>Provider</dt><dd id="detail-provider">—</dd>
+          <dt>BPM confidence</dt><dd id="detail-bpm-confidence">—</dd>
+          <dt>Key confidence</dt><dd id="detail-key-confidence">—</dd>
+          <dt>Evidence</dt><dd id="detail-evidence">—</dd>
+          <dt>Error</dt><dd id="detail-error">—</dd>
+        </dl>
+        <div>
+          <h4>Warnings</h4>
+          <ul id="detail-warnings"></ul>
+        </div>
+
+        <form id="correction-form">
+          <h4>Manual correction</h4>
+          <div class="form-grid">
+            <label>BPM <input id="correction-bpm" inputmode="decimal" type="number" min="20" max="300" step="0.01"></label>
+            <label>Key tonic <input id="correction-key-tonic" maxlength="32"></label>
+            <label>Key scale <input id="correction-key-scale" maxlength="32"></label>
+            <label>Camelot <input id="correction-camelot" maxlength="32"></label>
+            <label>Energy <input id="correction-energy" inputmode="decimal" type="number" min="0" max="1" step="0.01"></label>
+            <label>Reason <input id="correction-reason" maxlength="512"></label>
+          </div>
+          <div class="actions">
+            <button id="apply-correction" type="submit">Apply correction</button>
+            <button id="reanalyze-track" type="button">Re-analyze track</button>
+          </div>
+        </form>
       </section>
     </section>
   </main>
