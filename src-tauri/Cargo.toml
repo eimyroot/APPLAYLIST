@@ -3,7 +3,7 @@ name = "applaylist-desktop-host"
 version = "0.1.0"
 description = "Minimal APPLAYLIST Tauri host and native library-root capability boundary"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.88.0"
 publish = false
 
 [lib]

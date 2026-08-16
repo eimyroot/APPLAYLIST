@@ -13,6 +13,7 @@ from core.library.contracts import (
 
 
 CancelRequested = Callable[[], bool]
+ScanProgressUpdated = Callable[[int, int], None]
 DirectoryIdentity = tuple[int, int]
 
 
@@ -22,9 +23,13 @@ class LibraryScanner:
         *,
         policy: LibraryScanPolicy | None = None,
         cancel_requested: CancelRequested | None = None,
+        progress_updated: ScanProgressUpdated | None = None,
     ) -> None:
         self.policy = policy or LibraryScanPolicy()
         self._cancel_requested = cancel_requested or (lambda: False)
+        self._progress_updated = progress_updated or (
+            lambda _discovered_entries, _accepted: None
+        )
 
     def scan(self, root: str | Path) -> LibraryScanResult:
         requested_root = Path(root).expanduser()
@@ -84,6 +89,7 @@ class LibraryScanner:
 
         visited_directories: set[DirectoryIdentity] = {root_identity}
         pending_directories: list[Path] = [resolved_root]
+        self._progress_updated(0, 0)
 
         while pending_directories and not stop:
             if self._cancel_requested():
@@ -126,6 +132,7 @@ class LibraryScanner:
                     stop = True
                     break
                 discovered_entries += 1
+                self._progress_updated(discovered_entries, len(accepted))
 
                 if not self.policy.include_hidden and entry.name.startswith("."):
                     skipped.append(
@@ -159,6 +166,7 @@ class LibraryScanner:
                         child_directories=child_directories,
                         visited_directories=visited_directories,
                     )
+                    self._progress_updated(discovered_entries, len(accepted))
                     if stop:
                         file_limit_reached = True
                         break
@@ -228,6 +236,8 @@ class LibraryScanner:
                     ):
                         file_limit_reached = True
                         stop = True
+                    self._progress_updated(discovered_entries, len(accepted))
+                    if stop:
                         break
                     continue
 
@@ -243,6 +253,7 @@ class LibraryScanner:
                 child_directories.sort(key=self._path_sort_key, reverse=True)
                 pending_directories.extend(child_directories)
 
+        self._progress_updated(discovered_entries, len(accepted))
         accepted_paths = tuple(sorted(accepted, key=self._text_sort_key))
         return LibraryScanResult(
             root=root_text,

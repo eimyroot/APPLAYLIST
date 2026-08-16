@@ -17,6 +17,7 @@
       <div class="actions">
         <button id="choose-library" type="button">Choose library</button>
         <button id="import-library" type="button" disabled>Import library</button>
+        <button id="cancel-import" type="button" disabled>Cancel import</button>
       </div>
 
       <dl class="selected-library">
@@ -25,6 +26,22 @@
       </dl>
 
       <p id="status" class="status" role="status" aria-live="polite">Ready.</p>
+
+      <section id="import-progress" aria-labelledby="import-progress-heading" hidden>
+        <h3 id="import-progress-heading">Import progress</h3>
+        <dl class="summary-grid">
+          <dt>Phase</dt>
+          <dd id="progress-phase">—</dd>
+          <dt>Discovered</dt>
+          <dd id="progress-discovered">0</dd>
+          <dt>Accepted</dt>
+          <dd id="progress-accepted">0</dd>
+          <dt>Imported</dt>
+          <dd id="progress-imported">0</dd>
+          <dt>Persisted</dt>
+          <dd id="progress-persisted">0</dd>
+        </dl>
+      </section>
 
       <section id="import-summary" aria-labelledby="import-summary-heading" hidden>
         <h3 id="import-summary-heading">Import summary</h3>

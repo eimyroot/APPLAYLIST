@@ -1,11 +1,36 @@
 (() => {
   "use strict";
 
+  const POLL_INTERVAL_MS = 250;
+  const JOB_STATES = new Set([
+    "pending",
+    "running",
+    "cancelling",
+    "succeeded",
+    "cancelled",
+    "failed",
+  ]);
+  const JOB_PHASES = new Set([
+    "starting",
+    "scanning",
+    "importing",
+    "persisting",
+    "finalizing",
+  ]);
+  const TERMINAL_STATES = new Set(["succeeded", "cancelled", "failed"]);
+
   const chooseButton = document.getElementById("choose-library");
   const importButton = document.getElementById("import-library");
+  const cancelButton = document.getElementById("cancel-import");
   const importSection = document.getElementById("library-import");
   const selectedLibrary = document.getElementById("selected-library");
   const status = document.getElementById("status");
+  const progressPanel = document.getElementById("import-progress");
+  const progressPhase = document.getElementById("progress-phase");
+  const progressDiscovered = document.getElementById("progress-discovered");
+  const progressAccepted = document.getElementById("progress-accepted");
+  const progressImported = document.getElementById("progress-imported");
+  const progressPersisted = document.getElementById("progress-persisted");
   const summary = document.getElementById("import-summary");
   const summaryLibrary = document.getElementById("summary-library");
   const summaryDiscovered = document.getElementById("summary-discovered");
@@ -22,17 +47,24 @@
 
   const invoke = window.__TAURI__?.core?.invoke;
   let selectedCapability = null;
+  let activeJobId = null;
   let busy = false;
+  let cancelRequested = false;
 
   function setStatus(message) {
     status.textContent = message;
   }
 
+  function updateControls() {
+    chooseButton.disabled = busy;
+    importButton.disabled = busy || selectedCapability === null;
+    cancelButton.disabled = !busy || activeJobId === null || cancelRequested;
+    importSection.setAttribute("aria-busy", busy ? "true" : "false");
+  }
+
   function setBusy(nextBusy) {
     busy = nextBusy;
-    chooseButton.disabled = nextBusy;
-    importButton.disabled = nextBusy || selectedCapability === null;
-    importSection.setAttribute("aria-busy", nextBusy ? "true" : "false");
+    updateControls();
   }
 
   function validCapability(value) {
@@ -48,6 +80,24 @@
 
   function nullableText(value) {
     return value === null || typeof value === "string";
+  }
+
+  function validCounts(value) {
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      Number.isInteger(value.discovered_entries) &&
+      value.discovered_entries >= 0 &&
+      Number.isInteger(value.accepted) &&
+      value.accepted >= 0 &&
+      Number.isInteger(value.imported) &&
+      value.imported >= 0 &&
+      Number.isInteger(value.persisted) &&
+      value.persisted >= 0 &&
+      value.persisted <= value.imported &&
+      value.imported <= value.accepted &&
+      value.accepted <= value.discovered_entries
+    );
   }
 
   function validTrack(value) {
@@ -89,18 +139,51 @@
       value !== null &&
       typeof value === "object" &&
       typeof value.folder_name === "string" &&
-      value.counts !== null &&
-      typeof value.counts === "object" &&
-      Number.isInteger(value.counts.discovered_entries) &&
-      Number.isInteger(value.counts.accepted) &&
-      Number.isInteger(value.counts.imported) &&
-      Number.isInteger(value.counts.persisted) &&
+      validCounts(value.counts) &&
       Array.isArray(value.tracks) &&
       value.tracks.every(validTrack) &&
       Array.isArray(value.issues) &&
       value.issues.every(validIssue) &&
       typeof value.complete === "boolean" &&
-      typeof value.cancelled === "boolean"
+      typeof value.cancelled === "boolean" &&
+      typeof value.entry_limit_reached === "boolean" &&
+      typeof value.file_limit_reached === "boolean"
+    );
+  }
+
+  function validJobSnapshot(value) {
+    if (
+      value === null ||
+      typeof value !== "object" ||
+      typeof value.import_job_id !== "string" ||
+      !/^lij_[0-9a-f]{32}$/.test(value.import_job_id) ||
+      !JOB_STATES.has(value.state) ||
+      !JOB_PHASES.has(value.phase) ||
+      !validCounts(value.counts) ||
+      typeof value.terminal !== "boolean" ||
+      !nullableText(value.error_code)
+    ) {
+      return false;
+    }
+
+    if (value.terminal !== TERMINAL_STATES.has(value.state)) {
+      return false;
+    }
+    if (!value.terminal) {
+      return value.result === null;
+    }
+    if (value.state === "failed") {
+      return value.result === null;
+    }
+    return validImportResult(value.result);
+  }
+
+  function countsDoNotRegress(previous, next) {
+    return (
+      next.discovered_entries >= previous.discovered_entries &&
+      next.accepted >= previous.accepted &&
+      next.imported >= previous.imported &&
+      next.persisted >= previous.persisted
     );
   }
 
@@ -114,6 +197,10 @@
       return error.message;
     }
     return "The desktop host could not complete the request.";
+  }
+
+  function delay(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
 
   function displayFormat(fileName) {
@@ -138,6 +225,15 @@
     const cell = document.createElement("td");
     cell.textContent = value;
     row.appendChild(cell);
+  }
+
+  function renderProgress(snapshot) {
+    progressPhase.textContent = snapshot.phase;
+    progressDiscovered.textContent = String(snapshot.counts.discovered_entries);
+    progressAccepted.textContent = String(snapshot.counts.accepted);
+    progressImported.textContent = String(snapshot.counts.imported);
+    progressPersisted.textContent = String(snapshot.counts.persisted);
+    progressPanel.hidden = false;
   }
 
   function renderImportSummary(result) {
@@ -201,6 +297,15 @@
     issueList.replaceChildren();
   }
 
+  function clearProgress() {
+    progressPanel.hidden = true;
+    progressPhase.textContent = "—";
+    progressDiscovered.textContent = "0";
+    progressAccepted.textContent = "0";
+    progressImported.textContent = "0";
+    progressPersisted.textContent = "0";
+  }
+
   async function chooseLibrary() {
     if (busy || typeof invoke !== "function") {
       return;
@@ -222,12 +327,38 @@
       selectedCapability = capability;
       selectedLibrary.textContent = capability.display_name;
       clearResults();
+      clearProgress();
       setStatus("Library selected. Ready to import.");
     } catch (error) {
       setStatus(errorMessage(error));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function pollImport(initialSnapshot) {
+    let snapshot = initialSnapshot;
+    renderProgress(snapshot);
+
+    while (!snapshot.terminal) {
+      await delay(POLL_INTERVAL_MS);
+      const next = await invoke("library_import_status", {
+        importJobId: snapshot.import_job_id,
+      });
+      if (!validJobSnapshot(next)) {
+        throw new Error("The desktop host returned an invalid import status.");
+      }
+      if (
+        next.import_job_id !== snapshot.import_job_id ||
+        !countsDoNotRegress(snapshot.counts, next.counts)
+      ) {
+        throw new Error("The desktop host returned a regressive import status.");
+      }
+      snapshot = next;
+      renderProgress(snapshot);
+    }
+
+    return snapshot;
   }
 
   async function importLibrary() {
@@ -237,10 +368,25 @@
 
     const capabilityId = selectedCapability.capability_id;
     setBusy(true);
-    setStatus("Importing library…");
+    clearResults();
+    clearProgress();
+    setStatus("Starting library import…");
 
     try {
-      const result = await invoke("library_import_root", { capabilityId });
+      const initial = await invoke("library_import_start", { capabilityId });
+      if (!validJobSnapshot(initial)) {
+        throw new Error("The desktop host returned an invalid import job.");
+      }
+      activeJobId = initial.import_job_id;
+      cancelRequested = false;
+      updateControls();
+
+      const terminal = await pollImport(initial);
+      if (terminal.state === "failed") {
+        throw new Error("The desktop import failed safely.");
+      }
+
+      const result = terminal.result;
       if (!validImportResult(result)) {
         throw new Error("The desktop host returned an invalid import result.");
       }
@@ -249,7 +395,7 @@
       renderLibraryTracks(result.tracks);
       renderIssues(result.issues);
 
-      if (result.cancelled) {
+      if (terminal.state === "cancelled" || result.cancelled) {
         setStatus("Import cancelled. Partial results are shown.");
       } else if (result.complete) {
         setStatus(`Import complete. ${result.counts.persisted} tracks persisted.`);
@@ -260,18 +406,49 @@
       clearResults();
       setStatus(errorMessage(error));
     } finally {
+      activeJobId = null;
+      cancelRequested = false;
       setBusy(false);
+    }
+  }
+
+  async function cancelImport() {
+    if (!busy || typeof invoke !== "function" || activeJobId === null || cancelRequested) {
+      return;
+    }
+
+    cancelRequested = true;
+    updateControls();
+    setStatus("Cancelling library import…");
+
+    try {
+      const snapshot = await invoke("library_import_cancel", {
+        importJobId: activeJobId,
+      });
+      if (!validJobSnapshot(snapshot) || snapshot.import_job_id !== activeJobId) {
+        throw new Error("The desktop host returned an invalid cancellation state.");
+      }
+      renderProgress(snapshot);
+      if (snapshot.terminal && snapshot.state !== "cancelled") {
+        setStatus("Import had already completed before cancellation.");
+      }
+    } catch (error) {
+      cancelRequested = false;
+      updateControls();
+      setStatus(errorMessage(error));
     }
   }
 
   if (typeof invoke !== "function") {
     chooseButton.disabled = true;
     importButton.disabled = true;
+    cancelButton.disabled = true;
     setStatus("Desktop bridge unavailable.");
     return;
   }
 
   chooseButton.addEventListener("click", chooseLibrary);
   importButton.addEventListener("click", importLibrary);
+  cancelButton.addEventListener("click", cancelImport);
   setBusy(false);
 })();
