@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-library-root",
-  "description": "Allow the local main window to select and import only through APPLAYLIST opaque library-root capabilities.",
+  "description": "Allow the local main window to select a library root and control only its bounded APPLAYLIST import job lifecycle.",
   "local": true,
   "windows": [
     "main"
@@ -11,6 +11,8 @@
   ],
   "permissions": [
     "allow-library-choose-root",
-    "allow-library-import-root"
+    "allow-library-import-start",
+    "allow-library-import-status",
+    "allow-library-import-cancel"
   ]
 }
