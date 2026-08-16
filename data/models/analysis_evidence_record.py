@@ -9,6 +9,7 @@ class AnalysisEvidenceRecord:
     track_id: str
     provider: str
     analysis_version: str
+    status: str = "succeeded"
     provider_version: str | None = None
     algorithm_version: str | None = None
     bpm: float | None = None
@@ -20,6 +21,8 @@ class AnalysisEvidenceRecord:
     energy: float | None = None
     duration_seconds: float | None = None
     warnings: tuple[str, ...] = ()
+    error_code: str | None = None
+    error_detail: str | None = None
     created_at: str | None = None
 
 
