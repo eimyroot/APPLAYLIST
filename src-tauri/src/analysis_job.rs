@@ -271,7 +271,9 @@ fn validate_provider(provider: Option<&str>) -> Result<(), DesktopHostError> {
         if provider.is_empty()
             || provider.len() > 128
             || provider.trim() != provider
-            || provider.chars().any(|character| !character.is_ascii_graphic())
+            || provider
+                .chars()
+                .any(|character| !character.is_ascii_graphic())
         {
             return Err(invalid_analysis_request());
         }
@@ -339,10 +341,7 @@ fn invalid_analysis_request() -> DesktopHostError {
 }
 
 fn invalid_track_id() -> DesktopHostError {
-    DesktopHostError::new(
-        "invalid_track_id",
-        "The track identifier is invalid.",
-    )
+    DesktopHostError::new("invalid_track_id", "The track identifier is invalid.")
 }
 
 #[tauri::command]
@@ -411,7 +410,12 @@ pub async fn analysis_inspector_list(
         bridge.inspector_list_with_resource_dir(&filter, bundled_resource_dir.as_deref())
     })
     .await
-    .map_err(|_| DesktopHostError::new("desktop_analysis_task_failed", "The analysis inspector task failed."))?
+    .map_err(|_| {
+        DesktopHostError::new(
+            "desktop_analysis_task_failed",
+            "The analysis inspector task failed.",
+        )
+    })?
     .map_err(DesktopHostError::from)
 }
 
@@ -428,7 +432,12 @@ pub async fn analysis_inspector_get(
         bridge.inspector_get_with_resource_dir(&track_id, bundled_resource_dir.as_deref())
     })
     .await
-    .map_err(|_| DesktopHostError::new("desktop_analysis_task_failed", "The analysis inspector task failed."))?
+    .map_err(|_| {
+        DesktopHostError::new(
+            "desktop_analysis_task_failed",
+            "The analysis inspector task failed.",
+        )
+    })?
     .map_err(DesktopHostError::from)
 }
 
@@ -452,7 +461,12 @@ pub async fn analysis_correct(
         )
     })
     .await
-    .map_err(|_| DesktopHostError::new("desktop_analysis_task_failed", "The analysis correction task failed."))?
+    .map_err(|_| {
+        DesktopHostError::new(
+            "desktop_analysis_task_failed",
+            "The analysis correction task failed.",
+        )
+    })?
     .map_err(DesktopHostError::from)
 }
 

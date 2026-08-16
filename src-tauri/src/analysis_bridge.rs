@@ -615,8 +615,7 @@ impl AuthenticatedAnalysisSession {
     }
 
     fn shutdown(&mut self) {
-        self.process
-            .shutdown(self.port, &self.secret, &self.nonce);
+        self.process.shutdown(self.port, &self.secret, &self.nonce);
     }
 }
 
@@ -727,10 +726,15 @@ fn parse_analysis_snapshot(body: &[u8]) -> Result<SidecarAnalysisSnapshotDto, An
     Ok(snapshot)
 }
 
-fn parse_inspector_list(body: &[u8]) -> Result<DesktopAnalysisInspectorListDto, AnalysisBridgeError> {
+fn parse_inspector_list(
+    body: &[u8],
+) -> Result<DesktopAnalysisInspectorListDto, AnalysisBridgeError> {
     let list = serde_json::from_slice::<DesktopAnalysisInspectorListDto>(body)
         .map_err(|_| AnalysisBridgeError::invalid_response())?;
-    if !matches!(list.filter.as_str(), "all" | "uncertain" | "failed" | "corrected") {
+    if !matches!(
+        list.filter.as_str(),
+        "all" | "uncertain" | "failed" | "corrected"
+    ) {
         return Err(AnalysisBridgeError::invalid_response());
     }
     for item in &list.items {
@@ -739,14 +743,18 @@ fn parse_inspector_list(body: &[u8]) -> Result<DesktopAnalysisInspectorListDto, 
     Ok(list)
 }
 
-fn parse_inspector_item(body: &[u8]) -> Result<DesktopAnalysisInspectorItemDto, AnalysisBridgeError> {
+fn parse_inspector_item(
+    body: &[u8],
+) -> Result<DesktopAnalysisInspectorItemDto, AnalysisBridgeError> {
     let item = serde_json::from_slice::<DesktopAnalysisInspectorItemDto>(body)
         .map_err(|_| AnalysisBridgeError::invalid_response())?;
     validate_inspector_item(&item)?;
     Ok(item)
 }
 
-fn validate_inspector_item(item: &DesktopAnalysisInspectorItemDto) -> Result<(), AnalysisBridgeError> {
+fn validate_inspector_item(
+    item: &DesktopAnalysisInspectorItemDto,
+) -> Result<(), AnalysisBridgeError> {
     validate_track_id(&item.track_id)?;
     if !matches!(item.status.as_str(), "succeeded" | "failed")
         || !matches!(item.source.as_str(), "provider" | "manual-correction")
@@ -774,7 +782,10 @@ fn validate_inspector_item(item: &DesktopAnalysisInspectorItemDto) -> Result<(),
     validate_optional_bounded_text(item.error_code.as_deref(), 128, false)?;
     validate_optional_bounded_text(item.error_detail.as_deref(), 512, true)?;
     for warning in &item.warnings {
-        if warning.len() > 512 || warning.chars().any(char::is_control) || looks_like_absolute_path(warning) {
+        if warning.len() > 512
+            || warning.chars().any(char::is_control)
+            || looks_like_absolute_path(warning)
+        {
             return Err(AnalysisBridgeError::invalid_response());
         }
     }
@@ -868,7 +879,9 @@ fn validate_provider(provider: Option<&str>) -> Result<(), AnalysisBridgeError> 
         if provider.is_empty()
             || provider.len() > 128
             || provider.trim() != provider
-            || provider.chars().any(|character| !character.is_ascii_graphic())
+            || provider
+                .chars()
+                .any(|character| !character.is_ascii_graphic())
         {
             return Err(AnalysisBridgeError::invalid_request());
         }
@@ -881,8 +894,12 @@ fn validate_sidecar_job_id(job_id: &str) -> Result<(), AnalysisBridgeError> {
         return Err(AnalysisBridgeError::invalid_response());
     };
     if encoded.len() != 32
-        || !encoded.chars().all(|character| character.is_ascii_hexdigit())
-        || encoded.chars().any(|character| character.is_ascii_uppercase())
+        || !encoded
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+        || encoded
+            .chars()
+            .any(|character| character.is_ascii_uppercase())
     {
         return Err(AnalysisBridgeError::invalid_response());
     }
@@ -964,15 +981,8 @@ fn validate_ready(ready: &SidecarReady, nonce: &str) -> Result<(), AnalysisBridg
 }
 
 fn verify_health(port: u16, secret: &str, nonce: &str) -> Result<(), AnalysisBridgeError> {
-    let (status, body) = request_json(
-        port,
-        "GET",
-        "/v1/health",
-        secret,
-        nonce,
-        None,
-        HTTP_TIMEOUT,
-    )?;
+    let (status, body) =
+        request_json(port, "GET", "/v1/health", secret, nonce, None, HTTP_TIMEOUT)?;
     if status == 401 {
         return Err(AnalysisBridgeError::authentication_failed());
     }
