@@ -10,6 +10,8 @@ APP_JS = ROOT / "desktop" / "host-proof" / "app.js"
 APP_CSS = ROOT / "desktop" / "host-proof" / "app.css"
 TAURI_CONF = ROOT / "src-tauri" / "tauri.conf.json"
 CAPABILITY = ROOT / "src-tauri" / "capabilities" / "main-library-root.json"
+BUILD_RS = ROOT / "src-tauri" / "build.rs"
+LIB_RS = ROOT / "src-tauri" / "src" / "lib.rs"
 
 
 def test_renderer_uses_external_assets_and_safe_dom_sinks() -> None:
@@ -159,3 +161,32 @@ def test_tauri_global_api_and_capability_surface_are_narrow() -> None:
         "allow-library-import-status",
         "allow-library-import-cancel",
     ]
+
+
+def test_tauri_build_handler_and_capability_command_surfaces_match() -> None:
+    build_rs = BUILD_RS.read_text(encoding="utf-8")
+    lib_rs = LIB_RS.read_text(encoding="utf-8")
+    capability = json.loads(CAPABILITY.read_text(encoding="utf-8"))
+
+    expected_commands = {
+        "library_choose_root",
+        "library_import_start",
+        "library_import_status",
+        "library_import_cancel",
+    }
+    build_commands = set(re.findall(r'"(library_[a-z_]+)"', build_rs))
+    handler_commands = set(
+        re.findall(
+            r"(?:library_capability|import_job)::(library_[a-z_]+)",
+            lib_rs,
+        )
+    )
+    expected_permissions = {
+        f"allow-{command.replace('_', '-')}" for command in expected_commands
+    }
+
+    assert build_commands == expected_commands
+    assert handler_commands == expected_commands
+    assert set(capability["permissions"]) == expected_permissions
+    assert "library_import_root" not in build_commands
+    assert "library_import_root" not in handler_commands
