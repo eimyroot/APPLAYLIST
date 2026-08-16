@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from core.analysis.job_contract import AnalysisJobCounts, AnalysisJobSnapshot
+from collections.abc import Sequence
+
+from core.analysis.job_contract import AnalysisJobSnapshot
 from data.repositories.analysis_job_repository import AnalysisJobRepository
 
 
@@ -11,18 +13,19 @@ class AnalysisJobService:
     def create_job(
         self,
         *,
-        selected: int,
+        track_ids: Sequence[str],
         preferred_provider: str | None = None,
     ) -> AnalysisJobSnapshot:
-        if selected <= 0:
-            raise ValueError("analysis job scope must contain at least one track")
-        return self._repo.create(
-            selected=selected,
+        return self._repo.create_scope(
+            track_ids=track_ids,
             preferred_provider=preferred_provider,
         )
 
     def get_job(self, job_id: str) -> AnalysisJobSnapshot | None:
         return self._repo.get(job_id)
+
+    def get_targets(self, job_id: str) -> tuple[str, ...]:
+        return self._repo.get_targets(job_id)
 
     def mark_running(self, job_id: str) -> AnalysisJobSnapshot:
         current = self._require(job_id)
@@ -37,40 +40,36 @@ class AnalysisJobService:
             error_detail=current.error_detail,
         )
 
-    def record_success(self, job_id: str, *, uncertain: bool = False) -> AnalysisJobSnapshot:
-        current = self._require_running(job_id)
-        counts = AnalysisJobCounts(
-            selected=current.counts.selected,
-            completed=current.counts.completed + 1,
-            succeeded=current.counts.succeeded + 1,
-            failed=current.counts.failed,
-            uncertain=current.counts.uncertain + int(bool(uncertain)),
-        )
-        return self._repo.update(
+    def record_success(
+        self,
+        job_id: str,
+        *,
+        track_id: str,
+        evidence_id: str,
+        uncertain: bool = False,
+    ) -> AnalysisJobSnapshot:
+        return self._repo.record_target_outcome(
             job_id,
-            status=current.status,
-            counts=counts,
-            cancel_requested=current.cancel_requested,
-            error_code=current.error_code,
-            error_detail=current.error_detail,
+            track_id=track_id,
+            status="succeeded",
+            evidence_id=evidence_id,
+            uncertain=uncertain,
         )
 
-    def record_failure(self, job_id: str) -> AnalysisJobSnapshot:
-        current = self._require_running(job_id)
-        counts = AnalysisJobCounts(
-            selected=current.counts.selected,
-            completed=current.counts.completed + 1,
-            succeeded=current.counts.succeeded,
-            failed=current.counts.failed + 1,
-            uncertain=current.counts.uncertain,
-        )
-        return self._repo.update(
+    def record_failure(
+        self,
+        job_id: str,
+        *,
+        track_id: str,
+        evidence_id: str,
+        error_code: str,
+    ) -> AnalysisJobSnapshot:
+        return self._repo.record_target_outcome(
             job_id,
-            status=current.status,
-            counts=counts,
-            cancel_requested=current.cancel_requested,
-            error_code=current.error_code,
-            error_detail=current.error_detail,
+            track_id=track_id,
+            status="failed",
+            evidence_id=evidence_id,
+            error_code=error_code,
         )
 
     def request_cancel(self, job_id: str) -> AnalysisJobSnapshot:
@@ -123,12 +122,4 @@ class AnalysisJobService:
         current = self._repo.get(job_id)
         if current is None:
             raise KeyError("unknown analysis job")
-        return current
-
-    def _require_running(self, job_id: str) -> AnalysisJobSnapshot:
-        current = self._require(job_id)
-        if current.status not in {"running", "cancelling"}:
-            raise ValueError("analysis result can only be recorded for an active job")
-        if current.counts.completed >= current.counts.selected:
-            raise ValueError("analysis job selected scope is already complete")
         return current
