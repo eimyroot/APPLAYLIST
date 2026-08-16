@@ -151,6 +151,11 @@ def test_analysis_job_scope_is_bounded_unique_and_fail_closed(
     with pytest.raises(KeyError, match="unknown analysis job"):
         repository.get_targets("aj_missing")
 
+    repository.update(
+        created.job_id,
+        status="running",
+        counts=created.counts,
+    )
     with pytest.raises(KeyError, match="outside analysis job scope"):
         repository.record_target_outcome(
             created.job_id,
