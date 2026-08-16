@@ -43,6 +43,12 @@ jobs:
       - name: Rustfmt check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
+      - name: Prepare compile-only bundled resource fixture
+        run: |
+          mkdir -p artifacts/desktop-sidecar/dist/applaylist-sidecar
+          printf '%s\n' 'Desktop Rust compile-only resource fixture.' \
+            > artifacts/desktop-sidecar/dist/applaylist-sidecar/README.txt
+
       - name: Cargo check
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml
 
