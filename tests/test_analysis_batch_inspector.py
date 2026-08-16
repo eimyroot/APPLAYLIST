@@ -218,6 +218,30 @@ def test_inspector_uses_safe_fields_and_manual_correction_overlay(
     assert inspector.list_items("corrected") == [corrected]
 
 
+def test_inspector_never_leaks_windows_style_absolute_path(
+    isolated_database: Path,
+) -> None:
+    tracks = TrackRepository()
+    evidence = AnalysisEvidenceRepository()
+    inspector = AnalysisInspectorService(
+        evidence_repository=evidence,
+        track_repository=tracks,
+    )
+    windows_path = r"C:\Users\Eimy\Music\secret\windows-track.wav"
+    _track(tracks, "track-windows", windows_path, title=None)
+    AnalysisResultStore(evidence).persist_success(
+        track_id="track-windows",
+        result=_result(windows_path),
+    )
+
+    item = inspector.get_item("track-windows")
+    assert item is not None
+    assert item.title == "windows-track.wav"
+    assert "C:\\Users" not in repr(item.to_dict())
+    assert "secret" not in item.title
+    assert "path" not in item.to_dict()
+
+
 def test_successful_reanalysis_keeps_correction_history_but_deactivates_old_override(
     isolated_database: Path,
 ) -> None:
