@@ -78,9 +78,7 @@ impl ImportJobRegistry {
 
         let id = Uuid::new_v4();
         let encoded_id = format!("{IMPORT_JOB_PREFIX}{}", id.simple());
-        let snapshot = Arc::new(Mutex::new(DesktopImportJobSnapshotDto::new(
-            encoded_id,
-        )));
+        let snapshot = Arc::new(Mutex::new(DesktopImportJobSnapshotDto::new(encoded_id)));
         let cancel_requested = Arc::new(AtomicBool::new(false));
 
         *current = Some(ImportJobRecord {
@@ -168,10 +166,7 @@ impl ImportJobRegistry {
             return Err(unknown_job());
         }
 
-        let mut snapshot = record
-            .snapshot
-            .lock()
-            .map_err(|_| registry_unavailable())?;
+        let mut snapshot = record.snapshot.lock().map_err(|_| registry_unavailable())?;
         if snapshot.terminal {
             return Ok(snapshot.clone());
         }
@@ -196,9 +191,7 @@ fn update_progress(
         progress.state.as_str(),
         "succeeded" | "cancelled" | "failed"
     );
-    if !sidecar_terminal
-        && (current.state != "cancelling" || progress.state == "cancelling")
-    {
+    if !sidecar_terminal && (current.state != "cancelling" || progress.state == "cancelling") {
         current.state = progress.state;
     }
     current.phase = progress.phase;
@@ -206,7 +199,9 @@ fn update_progress(
 }
 
 fn parse_job_id(raw: &str) -> Result<Uuid, DesktopHostError> {
-    let encoded = raw.strip_prefix(IMPORT_JOB_PREFIX).ok_or_else(invalid_job)?;
+    let encoded = raw
+        .strip_prefix(IMPORT_JOB_PREFIX)
+        .ok_or_else(invalid_job)?;
     if encoded.len() != 32
         || !encoded.chars().all(|ch| ch.is_ascii_hexdigit())
         || encoded.chars().any(|ch| ch.is_ascii_uppercase())
