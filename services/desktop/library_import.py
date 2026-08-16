@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -24,6 +25,48 @@ class DesktopLibraryIssueStage(StrEnum):
     SCAN_ERROR = "scan_error"
     IMPORT = "import"
     PERSISTENCE = "persistence"
+
+
+class DesktopLibraryImportPhase(StrEnum):
+    STARTING = "starting"
+    SCANNING = "scanning"
+    IMPORTING = "importing"
+    PERSISTING = "persisting"
+    FINALIZING = "finalizing"
+
+
+@dataclass(frozen=True, slots=True)
+class DesktopLibraryProgress:
+    phase: DesktopLibraryImportPhase
+    discovered_entries: int
+    accepted_count: int
+    imported_count: int
+    persisted_count: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.phase, DesktopLibraryImportPhase):
+            object.__setattr__(self, "phase", DesktopLibraryImportPhase(self.phase))
+        for value, name in (
+            (self.discovered_entries, "discovered_entries"),
+            (self.accepted_count, "accepted_count"),
+            (self.imported_count, "imported_count"),
+            (self.persisted_count, "persisted_count"),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise TypeError(f"{name} must be an integer")
+            if value < 0:
+                raise ValueError(f"{name} must be non-negative")
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "phase": self.phase.value,
+            "counts": {
+                "discovered_entries": self.discovered_entries,
+                "accepted": self.accepted_count,
+                "imported": self.imported_count,
+                "persisted": self.persisted_count,
+            },
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +171,10 @@ class LibraryIngestionPort(Protocol):
     def ingest(self, scan_result: LibraryScanResult) -> LibraryTrackIngestionResult: ...
 
 
+CancelRequested = Callable[[], bool]
+ProgressUpdated = Callable[[DesktopLibraryProgress], None]
+
+
 def _file_name(path: str) -> str | None:
     name = Path(path).name.strip()
     return name or None
@@ -154,9 +201,13 @@ class DesktopLibraryImportService:
         *,
         scanner: LibraryScanPort | None = None,
         ingestion: LibraryIngestionPort | None = None,
+        cancel_requested: CancelRequested | None = None,
+        progress_updated: ProgressUpdated | None = None,
     ) -> None:
-        self._scanner = scanner or LibraryScanner()
-        self._ingestion = ingestion or LibraryTrackIngestionService()
+        self._scanner = scanner
+        self._ingestion = ingestion
+        self._cancel_requested = cancel_requested or (lambda: False)
+        self._progress_updated = progress_updated or (lambda _progress: None)
 
     def import_folder(self, folder: str | Path) -> DesktopLibraryImportResult:
         requested = Path(folder).expanduser()
@@ -165,11 +216,42 @@ class DesktopLibraryImportService:
                 "desktop library folder must be an absolute host-selected path"
             )
 
-        scan = self._scanner.scan(requested)
-        ingestion = self._ingestion.ingest(scan)
+        counts = {
+            "discovered_entries": 0,
+            "accepted": 0,
+            "imported": 0,
+            "persisted": 0,
+        }
+        self._emit_progress(DesktopLibraryImportPhase.STARTING, counts)
+
+        scanner = self._scanner or LibraryScanner(cancel_requested=self._cancel_requested)
+        self._emit_progress(DesktopLibraryImportPhase.SCANNING, counts)
+        scan = scanner.scan(requested)
+        counts["discovered_entries"] = scan.discovered_entries
+        counts["accepted"] = scan.accepted_count
+        self._emit_progress(DesktopLibraryImportPhase.IMPORTING, counts)
+
+        def import_progress(imported: int) -> None:
+            counts["imported"] = max(counts["imported"], imported)
+            self._emit_progress(DesktopLibraryImportPhase.IMPORTING, counts)
+
+        def persistence_progress(persisted: int) -> None:
+            counts["persisted"] = max(counts["persisted"], persisted)
+            self._emit_progress(DesktopLibraryImportPhase.PERSISTING, counts)
+
+        ingestion_service = self._ingestion or LibraryTrackIngestionService(
+            cancel_requested=self._cancel_requested,
+            import_progress_updated=import_progress,
+            persistence_progress_updated=persistence_progress,
+        )
+        ingestion = ingestion_service.ingest(scan)
 
         if ingestion.import_result.source_scan_complete != scan.complete:
             raise RuntimeError("library ingestion scan-complete state drifted")
+
+        counts["imported"] = len(ingestion.import_result.candidates)
+        counts["persisted"] = len(ingestion.persistence_result.persisted)
+        self._emit_progress(DesktopLibraryImportPhase.FINALIZING, counts)
 
         candidates_by_id = {
             candidate.identity.track_id: candidate
@@ -226,6 +308,11 @@ class DesktopLibraryImportService:
 
         resolved_root = Path(scan.root)
         folder_name = resolved_root.name or resolved_root.anchor or "Library"
+        cancelled = (
+            scan.cancelled
+            or ingestion.import_result.cancelled
+            or ingestion.persistence_result.cancelled_count > 0
+        )
 
         return DesktopLibraryImportResult(
             folder_name=folder_name,
@@ -235,10 +322,25 @@ class DesktopLibraryImportService:
             accepted_count=scan.accepted_count,
             imported_count=len(ingestion.import_result.candidates),
             persisted_count=len(ingestion.persistence_result.persisted),
-            cancelled=scan.cancelled,
+            cancelled=cancelled,
             entry_limit_reached=scan.entry_limit_reached,
             file_limit_reached=scan.file_limit_reached,
-            complete=scan.complete and ingestion.complete,
+            complete=scan.complete and ingestion.complete and not cancelled,
+        )
+
+    def _emit_progress(
+        self,
+        phase: DesktopLibraryImportPhase,
+        counts: dict[str, int],
+    ) -> None:
+        self._progress_updated(
+            DesktopLibraryProgress(
+                phase=phase,
+                discovered_entries=counts["discovered_entries"],
+                accepted_count=counts["accepted"],
+                imported_count=counts["imported"],
+                persisted_count=counts["persisted"],
+            )
         )
 
     @staticmethod
