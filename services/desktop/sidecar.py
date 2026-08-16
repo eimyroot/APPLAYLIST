@@ -13,7 +13,9 @@ from typing import Any, TextIO
 
 from services.desktop.library_import import (
     DesktopLibraryImportError,
+    DesktopLibraryImportPhase,
     DesktopLibraryImportService,
+    DesktopLibraryProgress,
 )
 
 PROTOCOL_VERSION = "applaylist-sidecar-v1"
@@ -23,6 +25,15 @@ MAX_IMPORT_REQUEST_BYTES = 16_384
 MAX_LIBRARY_ROOT_CHARS = 4_096
 SECRET_HEADER = "X-APPLAYLIST-Sidecar-Secret"
 NONCE_HEADER = "X-APPLAYLIST-Readiness-Nonce"
+
+_TERMINAL_IMPORT_STATES = frozenset({"succeeded", "cancelled", "failed"})
+_PHASE_ORDER = {
+    DesktopLibraryImportPhase.STARTING.value: 0,
+    DesktopLibraryImportPhase.SCANNING.value: 1,
+    DesktopLibraryImportPhase.IMPORTING.value: 2,
+    DesktopLibraryImportPhase.PERSISTING.value: 3,
+    DesktopLibraryImportPhase.FINALIZING.value: 4,
+}
 
 
 class SidecarStartupError(ValueError):
@@ -101,6 +112,123 @@ def _required_text(value: Any, field: str, *, minimum: int, maximum: int) -> str
     return value
 
 
+class _LibraryImportSession:
+    def __init__(self, operation_lock: threading.Lock) -> None:
+        self._operation_lock = operation_lock
+        self._lock = threading.Lock()
+        self._cancel_requested = threading.Event()
+        self._started = False
+        self._state = "pending"
+        self._phase = DesktopLibraryImportPhase.STARTING.value
+        self._counts = {
+            "discovered_entries": 0,
+            "accepted": 0,
+            "imported": 0,
+            "persisted": 0,
+        }
+        self._result: dict[str, object] | None = None
+        self._error_code: str | None = None
+
+    def start(self, folder: str) -> bool:
+        with self._lock:
+            if self._started:
+                return False
+            if not self._operation_lock.acquire(blocking=False):
+                return False
+            self._started = True
+            self._state = "running"
+            self._phase = DesktopLibraryImportPhase.STARTING.value
+
+        try:
+            threading.Thread(
+                target=self._run,
+                args=(folder,),
+                name="applaylist-library-import",
+                daemon=True,
+            ).start()
+        except Exception:
+            with self._lock:
+                self._state = "failed"
+                self._error_code = "library_import_failed"
+            self._operation_lock.release()
+            return False
+        return True
+
+    def _run(self, folder: str) -> None:
+        try:
+            service = DesktopLibraryImportService(
+                cancel_requested=self._cancel_requested.is_set,
+                progress_updated=self._on_progress,
+            )
+            result = service.import_folder(folder)
+            payload = result.to_payload()
+            with self._lock:
+                self._result = payload
+                self._phase = DesktopLibraryImportPhase.FINALIZING.value
+                self._counts = dict(payload["counts"])
+                if result.cancelled or self._cancel_requested.is_set():
+                    self._state = "cancelled"
+                else:
+                    self._state = "succeeded"
+        except DesktopLibraryImportError:
+            with self._lock:
+                self._state = "failed"
+                self._error_code = "invalid_library_root"
+        except Exception:
+            with self._lock:
+                self._state = "failed"
+                self._error_code = "library_import_failed"
+        finally:
+            self._operation_lock.release()
+
+    def _on_progress(self, progress: DesktopLibraryProgress) -> None:
+        payload = progress.to_payload()
+        next_phase = str(payload["phase"])
+        next_counts = payload["counts"]
+        if not isinstance(next_counts, dict):
+            return
+        with self._lock:
+            if self._state in _TERMINAL_IMPORT_STATES:
+                return
+            if _PHASE_ORDER[next_phase] >= _PHASE_ORDER[self._phase]:
+                self._phase = next_phase
+            for key in self._counts:
+                value = next_counts.get(key)
+                if isinstance(value, int) and not isinstance(value, bool):
+                    self._counts[key] = max(self._counts[key], value)
+
+    def cancel(self) -> dict[str, object]:
+        self._cancel_requested.set()
+        with self._lock:
+            if self._started and self._state not in _TERMINAL_IMPORT_STATES:
+                self._state = "cancelling"
+            return self._snapshot_locked()
+
+    def snapshot(self) -> dict[str, object]:
+        with self._lock:
+            return self._snapshot_locked()
+
+    def has_started(self) -> bool:
+        with self._lock:
+            return self._started
+
+    def is_active(self) -> bool:
+        with self._lock:
+            return self._started and self._state not in _TERMINAL_IMPORT_STATES
+
+    def _snapshot_locked(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "state": self._state,
+            "phase": self._phase,
+            "counts": dict(self._counts),
+            "terminal": self._state in _TERMINAL_IMPORT_STATES,
+            "result": self._result,
+        }
+        if self._error_code is not None:
+            payload["error_code"] = self._error_code
+        return payload
+
+
 class _SidecarHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = False
@@ -110,6 +238,7 @@ class _SidecarHTTPServer(ThreadingHTTPServer):
         self.shutdown_requested = threading.Event()
         self.library_import = DesktopLibraryImportService()
         self.library_import_lock = threading.Lock()
+        self.library_import_session = _LibraryImportSession(self.library_import_lock)
         super().__init__(("127.0.0.1", 0), _SidecarRequestHandler)
 
 
@@ -126,11 +255,20 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
         return server
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path != "/v1/health":
+        if self.path not in {"/v1/health", "/v1/library/import/status"}:
             self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
         if not self._authorized():
             self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
+            return
+        if self.path == "/v1/library/import/status":
+            if not self.sidecar_server.library_import_session.has_started():
+                self._write_json(HTTPStatus.CONFLICT, {"error": "library_import_not_started"})
+                return
+            self._write_json(
+                HTTPStatus.OK,
+                self.sidecar_server.library_import_session.snapshot(),
+            )
             return
         self._write_json(
             HTTPStatus.OK,
@@ -145,6 +283,12 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
         if self.path == "/v1/library/import":
             self._handle_library_import()
             return
+        if self.path == "/v1/library/import/start":
+            self._handle_library_import_start()
+            return
+        if self.path == "/v1/library/import/cancel":
+            self._handle_library_import_cancel()
+            return
         if self.path != "/v1/shutdown":
             self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
@@ -155,6 +299,8 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
             self._write_json(HTTPStatus.BAD_REQUEST, {"error": "body_not_allowed"})
             return
 
+        if self.sidecar_server.library_import_session.is_active():
+            self.sidecar_server.library_import_session.cancel()
         self.sidecar_server.shutdown_requested.set()
         self._write_json(HTTPStatus.ACCEPTED, {"status": "shutting_down"})
         threading.Thread(
@@ -167,24 +313,68 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
         if not self._authorized():
             self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
             return
-        payload = self._read_import_payload()
-        if payload is None:
-            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_library_import_request"})
+        folder = self._validated_import_folder()
+        if folder is None:
             return
-        folder = payload.get("folder")
-        if not isinstance(folder, str) or not folder or len(folder) > MAX_LIBRARY_ROOT_CHARS:
-            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_library_import_request"})
+        if not self.sidecar_server.library_import_lock.acquire(blocking=False):
+            self._write_json(HTTPStatus.CONFLICT, {"error": "library_import_busy"})
             return
         try:
-            with self.sidecar_server.library_import_lock:
-                result = self.sidecar_server.library_import.import_folder(folder)
+            result = self.sidecar_server.library_import.import_folder(folder)
         except DesktopLibraryImportError:
             self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_library_root"})
             return
         except Exception:
             self._write_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "library_import_failed"})
             return
+        finally:
+            self.sidecar_server.library_import_lock.release()
         self._write_json(HTTPStatus.OK, result.to_payload())
+
+    def _handle_library_import_start(self) -> None:
+        if not self._authorized():
+            self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
+            return
+        folder = self._validated_import_folder()
+        if folder is None:
+            return
+        if not self.sidecar_server.library_import_session.start(folder):
+            self._write_json(HTTPStatus.CONFLICT, {"error": "library_import_busy"})
+            return
+        self._write_json(
+            HTTPStatus.ACCEPTED,
+            self.sidecar_server.library_import_session.snapshot(),
+        )
+
+    def _handle_library_import_cancel(self) -> None:
+        if not self._authorized():
+            self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
+            return
+        if not self._empty_body():
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "body_not_allowed"})
+            return
+        session = self.sidecar_server.library_import_session
+        if not session.has_started():
+            self._write_json(HTTPStatus.CONFLICT, {"error": "library_import_not_started"})
+            return
+        self._write_json(HTTPStatus.ACCEPTED, session.cancel())
+
+    def _validated_import_folder(self) -> str | None:
+        payload = self._read_import_payload()
+        if payload is None:
+            self._write_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "invalid_library_import_request"},
+            )
+            return None
+        folder = payload.get("folder")
+        if not isinstance(folder, str) or not folder or len(folder) > MAX_LIBRARY_ROOT_CHARS:
+            self._write_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "invalid_library_import_request"},
+            )
+            return None
+        return folder
 
     def _read_import_payload(self) -> dict[str, object] | None:
         if self.headers.get("Transfer-Encoding") is not None:
@@ -300,6 +490,8 @@ def run_sidecar(
         if stop_requested.is_set():
             return
         stop_requested.set()
+        if server.library_import_session.is_active():
+            server.library_import_session.cancel()
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     previous_sigterm = signal.signal(signal.SIGTERM, request_stop)
@@ -307,6 +499,8 @@ def run_sidecar(
     try:
         server.serve_forever(poll_interval=0.1)
     finally:
+        if server.library_import_session.is_active():
+            server.library_import_session.cancel()
         server.server_close()
         signal.signal(signal.SIGTERM, previous_sigterm)
         signal.signal(signal.SIGINT, previous_sigint)
