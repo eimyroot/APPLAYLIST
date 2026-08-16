@@ -1,0 +1,30 @@
+name: Rustfmt Diagnostic
+
+on:
+  push:
+    branches:
+      - feature/bundle-50b-analysis-desktop-transport
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --component rustfmt
+          rustup override set 1.88.0
+      - name: Format diagnostic copy
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml
+      - name: Upload formatted sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-50b-rustfmt
+          path: |
+            src-tauri/src/analysis_bridge.rs
+            src-tauri/src/analysis_job.rs
+          if-no-files-found: error
+          retention-days: 1
