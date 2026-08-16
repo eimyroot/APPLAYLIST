@@ -224,7 +224,17 @@ class DesktopLibraryImportService:
         }
         self._emit_progress(DesktopLibraryImportPhase.STARTING, counts)
 
-        scanner = self._scanner or LibraryScanner(cancel_requested=self._cancel_requested)
+        def scan_progress(discovered_entries: int, accepted: int) -> None:
+            counts["discovered_entries"] = max(
+                counts["discovered_entries"], discovered_entries
+            )
+            counts["accepted"] = max(counts["accepted"], accepted)
+            self._emit_progress(DesktopLibraryImportPhase.SCANNING, counts)
+
+        scanner = self._scanner or LibraryScanner(
+            cancel_requested=self._cancel_requested,
+            progress_updated=scan_progress,
+        )
         self._emit_progress(DesktopLibraryImportPhase.SCANNING, counts)
         scan = scanner.scan(requested)
         counts["discovered_entries"] = scan.discovered_entries
