@@ -184,6 +184,42 @@ def test_cancel_during_track_finishes_that_evidence_and_stops_next_track(
     assert evidence.latest_evidence_for_track("track-b") is None
 
 
+def test_cancel_before_worker_start_is_terminal_without_provider_call(
+    isolated_database: Path,
+) -> None:
+    tracks = TrackRepository()
+    jobs = AnalysisJobService()
+    evidence = AnalysisEvidenceRepository()
+    _track(tracks, "track-a", "/library/a.wav")
+    _track(tracks, "track-b", "/library/b.wav")
+
+    scripted = ScriptedAnalysisService(
+        {
+            "/library/a.wav": _result("/library/a.wav"),
+            "/library/b.wav": _result("/library/b.wav"),
+        }
+    )
+    job = jobs.create_job(track_ids=["track-a", "track-b"], preferred_provider="librosa")
+    cancelling = jobs.request_cancel(job.job_id)
+    assert cancelling.status == "cancelling"
+
+    terminal = AnalysisBatchRunner(
+        analysis_service=scripted,  # type: ignore[arg-type]
+        job_service=jobs,
+        result_store=AnalysisResultStore(evidence),
+        track_repository=tracks,
+    ).run(job.job_id)
+
+    assert terminal.status == "cancelled"
+    assert terminal.cancel_requested is True
+    assert terminal.counts.completed == 0
+    assert terminal.counts.succeeded == 0
+    assert terminal.counts.failed == 0
+    assert scripted.calls == []
+    assert evidence.latest_evidence_for_track("track-a") is None
+    assert evidence.latest_evidence_for_track("track-b") is None
+
+
 def test_inspector_uses_safe_fields_and_manual_correction_overlay(
     isolated_database: Path,
 ) -> None:
