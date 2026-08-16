@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from pathlib import Path
 
 from core.analysis.inspector_contract import (
     AnalysisInspectorFilter,
@@ -86,7 +85,7 @@ class AnalysisInspectorService:
             if isinstance(track.title, str) and track.title.strip():
                 title = track.title.strip()
             elif isinstance(track.path, str) and track.path.strip():
-                title = Path(track.path).name or attempt.track_id
+                title = self._safe_filename(track.path) or attempt.track_id
             if isinstance(track.artist, str) and track.artist.strip():
                 artist = track.artist.strip()
 
@@ -141,6 +140,13 @@ class AnalysisInspectorService:
             error_code=attempt.error_code if attempt.status == "failed" else None,
             error_detail=attempt.error_detail if attempt.status == "failed" else None,
         )
+
+    @staticmethod
+    def _safe_filename(path: str) -> str:
+        normalized = path.replace("\\", "/").rstrip("/")
+        if not normalized:
+            return ""
+        return normalized.rsplit("/", 1)[-1]
 
     @staticmethod
     def _decode_correction(payload_json: str) -> dict[str, object]:
