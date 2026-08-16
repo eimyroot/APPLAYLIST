@@ -6,25 +6,30 @@ on:
       - feature/bundle-50b-analysis-desktop-transport
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   format:
+    if: github.actor != 'github-actions[bot]'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: feature/bundle-50b-analysis-desktop-transport
       - name: Install pinned Rust toolchain
         run: |
           rustup toolchain install 1.88.0 --profile minimal --component rustfmt
           rustup override set 1.88.0
-      - name: Format diagnostic copy
+      - name: Apply pinned rustfmt
         run: cargo fmt --manifest-path src-tauri/Cargo.toml
-      - name: Upload formatted sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: bundle-50b-rustfmt
-          path: |
-            src-tauri/src/analysis_bridge.rs
-            src-tauri/src/analysis_job.rs
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit only formatted analysis Rust sources
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src-tauri/src/analysis_bridge.rs src-tauri/src/analysis_job.rs
+          if git diff --cached --quiet; then
+            echo 'No rustfmt changes required.'
+            exit 0
+          fi
+          git commit -m 'style(bundle-50b): apply pinned rustfmt'
+          git push origin HEAD:feature/bundle-50b-analysis-desktop-transport
