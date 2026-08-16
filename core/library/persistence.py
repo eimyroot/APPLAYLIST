@@ -71,17 +71,26 @@ class TrackPersistenceBatchResult:
     persisted: tuple[PersistedTrack, ...]
     issues: tuple[TrackPersistenceIssue, ...]
     requested_count: int
+    cancelled_count: int = 0
 
     def __post_init__(self) -> None:
-        if not isinstance(self.requested_count, int) or isinstance(
-            self.requested_count,
-            bool,
+        for value, name in (
+            (self.requested_count, "requested_count"),
+            (self.cancelled_count, "cancelled_count"),
         ):
-            raise TypeError("requested_count must be an integer")
-        if self.requested_count < 0:
-            raise ValueError("requested_count must be non-negative")
-        if len(self.persisted) + len(self.issues) != self.requested_count:
-            raise ValueError("persistence result must account for every requested candidate")
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise TypeError(f"{name} must be an integer")
+            if value < 0:
+                raise ValueError(f"{name} must be non-negative")
+        if self.cancelled_count > self.requested_count:
+            raise ValueError("cancelled_count cannot exceed requested_count")
+        if (
+            len(self.persisted) + len(self.issues) + self.cancelled_count
+            != self.requested_count
+        ):
+            raise ValueError(
+                "persistence result must account for every requested candidate"
+            )
 
         track_ids = tuple(item.track_id for item in self.persisted)
         if len(set(track_ids)) != len(track_ids):
@@ -111,7 +120,7 @@ class TrackPersistenceBatchResult:
 
     @property
     def complete(self) -> bool:
-        return not self.issues
+        return not self.issues and self.cancelled_count == 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +136,7 @@ class LibraryTrackIngestionResult:
     def complete(self) -> bool:
         return (
             self.import_result.source_scan_complete
+            and not self.import_result.cancelled
             and not self.import_result.issues
             and self.persistence_result.complete
         )
