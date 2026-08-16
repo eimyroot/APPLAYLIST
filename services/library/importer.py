@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from core.library.contracts import LibraryScanResult
 from core.library.track_metadata import (
@@ -16,6 +16,10 @@ from services.library.metadata import (
 )
 
 
+CancelRequested = Callable[[], bool]
+ImportProgressUpdated = Callable[[int], None]
+
+
 def _text_sort_key(value: str) -> tuple[str, str]:
     return value.casefold(), value
 
@@ -26,16 +30,25 @@ class LibraryCandidateImporter:
         *,
         identity_service: ContentTrackIdentityService | None = None,
         metadata_reader: TrackMetadataReader | None = None,
+        cancel_requested: CancelRequested | None = None,
+        progress_updated: ImportProgressUpdated | None = None,
     ) -> None:
         self._identity_service = identity_service or ContentTrackIdentityService()
         self._metadata_reader = metadata_reader or FilenameFallbackMetadataReader()
+        self._cancel_requested = cancel_requested or (lambda: False)
+        self._progress_updated = progress_updated or (lambda _imported: None)
 
     def import_scan(self, scan_result: LibraryScanResult) -> TrackImportBatchResult:
         candidates: list[TrackImportCandidate] = []
         issues: list[TrackImportIssue] = []
         seen_track_ids: dict[str, str] = {}
+        cancelled = False
 
         for path in sorted(scan_result.accepted_paths, key=_text_sort_key):
+            if self._cancel_requested():
+                cancelled = True
+                break
+
             try:
                 identity = self._identity_service.identify(path)
             except TrackIdentityError as exc:
@@ -83,7 +96,9 @@ class LibraryCandidateImporter:
 
             candidates.append(candidate)
             seen_track_ids[identity.track_id] = identity.source_path
+            self._progress_updated(len(candidates))
 
+        self._progress_updated(len(candidates))
         ordered_candidates = tuple(
             sorted(
                 candidates,
@@ -105,6 +120,7 @@ class LibraryCandidateImporter:
             candidates=ordered_candidates,
             issues=ordered_issues,
             source_scan_complete=scan_result.complete,
+            cancelled=cancelled,
         )
 
     def import_paths(
