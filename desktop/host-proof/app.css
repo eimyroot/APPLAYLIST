@@ -1,0 +1,142 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: dark;
+  background: #0b0d10;
+  color: #f4f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #0b0d10;
+  color: #f4f7fb;
+}
+
+main {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 48px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+section {
+  margin-top: 24px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+button {
+  border: 1px solid #343a46;
+  border-radius: 8px;
+  background: #171b22;
+  color: inherit;
+  padding: 10px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+button:focus-visible {
+  border-color: #7f8ba3;
+}
+
+button:focus-visible,
+table:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.selected-library,
+.summary-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 8px 16px;
+}
+
+.selected-library dt,
+.summary-grid dt {
+  color: #aab3c2;
+}
+
+.selected-library dd,
+.summary-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.status,
+.empty-state,
+#import-issues {
+  border: 1px solid #2b3039;
+  border-radius: 8px;
+  background: #12161c;
+  padding: 14px 16px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #10141a;
+}
+
+caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+th,
+td {
+  border-bottom: 1px solid #2b3039;
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: #c9d1dd;
+  font-weight: 600;
+}
+
+td {
+  color: #eef2f7;
+}
+
+#import-issues ul {
+  margin-bottom: 0;
+  padding-left: 20px;
+}
+
+[hidden] {
+  display: none !important;
+}

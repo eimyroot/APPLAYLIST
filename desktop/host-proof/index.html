@@ -4,30 +4,31 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>APPLAYLIST Desktop</title>
+  <link rel="stylesheet" href="./app.css">
   <script src="./app.js" defer></script>
 </head>
 <body>
   <main>
     <h1>APPLAYLIST</h1>
-    <section aria-labelledby="library-import-heading">
+    <section id="library-import" aria-labelledby="library-import-heading" aria-busy="false">
       <h2 id="library-import-heading">Library import</h2>
       <p>Select a music library folder, then import it through the authorized desktop bridge.</p>
 
-      <p>
+      <div class="actions">
         <button id="choose-library" type="button">Choose library</button>
         <button id="import-library" type="button" disabled>Import library</button>
-      </p>
+      </div>
 
-      <dl>
+      <dl class="selected-library">
         <dt>Selected library</dt>
         <dd id="selected-library">None</dd>
       </dl>
 
-      <p id="status" role="status" aria-live="polite">Ready.</p>
+      <p id="status" class="status" role="status" aria-live="polite">Ready.</p>
 
       <section id="import-summary" aria-labelledby="import-summary-heading" hidden>
         <h3 id="import-summary-heading">Import summary</h3>
-        <dl>
+        <dl class="summary-grid">
           <dt>Library</dt>
           <dd id="summary-library">—</dd>
           <dt>Discovered</dt>
@@ -41,6 +42,33 @@
           <dt>Issues</dt>
           <dd id="summary-issues">0</dd>
         </dl>
+      </section>
+
+      <section id="library-results" aria-labelledby="library-results-heading" hidden>
+        <h3 id="library-results-heading">Imported tracks</h3>
+        <p id="library-empty" class="empty-state" hidden>No imported tracks were returned for this folder.</p>
+        <div class="table-wrap">
+          <table id="library-table" hidden>
+            <caption>Imported library tracks</caption>
+            <thead>
+              <tr>
+                <th scope="col">Title</th>
+                <th scope="col">Artist</th>
+                <th scope="col">Format</th>
+                <th scope="col">Duration</th>
+                <th scope="col">State</th>
+                <th scope="col">Metadata</th>
+              </tr>
+            </thead>
+            <tbody id="library-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="import-issues" aria-labelledby="import-issues-heading" hidden>
+        <h3 id="import-issues-heading">Import issues</h3>
+        <p>Only bounded issue codes and safe file names are shown.</p>
+        <ul id="issue-list"></ul>
       </section>
     </section>
   </main>
