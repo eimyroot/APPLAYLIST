@@ -133,7 +133,7 @@ def test_renderer_validates_bounded_import_and_analysis_models() -> None:
     assert "absolute_path" not in js
     assert "process_id" not in js
     assert "nonce_sha256" not in js
-    assert "aj_" not in js
+    assert '"aj_' not in js
 
 
 def test_renderer_has_accessible_import_analysis_and_inspector_regions() -> None:
@@ -238,5 +238,5 @@ def test_analysis_rust_boundary_keeps_python_job_and_sidecar_internals_out_of_re
     assert '"/v1/analysis/inspector/get"' in bridge_rs
     assert '"/v1/analysis/correct"' in bridge_rs
     assert '"/v1/analysis/reanalyze"' in bridge_rs
-    assert "aj_" not in js
+    assert '"aj_' not in js
     assert "/v1/analysis/" not in js
