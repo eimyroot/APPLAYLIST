@@ -321,3 +321,89 @@ def test_analysis_evidence_and_corrections_are_append_only_and_anchored(
             base_evidence_id=second.evidence_id,
             values={"bpm": 140.0},
         )
+
+
+def test_analysis_evidence_migrates_pre_outcome_schema_before_index_creation(
+    isolated_database: Path,
+) -> None:
+    with sqlite3.connect(isolated_database) as conn:
+        conn.executescript(
+            '''
+            CREATE TABLE analysis_evidence (
+                evidence_id TEXT PRIMARY KEY,
+                track_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                analysis_version TEXT NOT NULL,
+                provider_version TEXT,
+                algorithm_version TEXT,
+                bpm REAL,
+                bpm_confidence REAL,
+                key_tonic TEXT,
+                key_scale TEXT,
+                camelot TEXT,
+                key_confidence REAL,
+                energy REAL,
+                duration_seconds REAL,
+                warnings_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE analysis_corrections (
+                correction_id TEXT PRIMARY KEY,
+                track_id TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                reason TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            '''
+        )
+
+    repository = AnalysisEvidenceRepository()
+    repository.ensure_schema()
+
+    with sqlite3.connect(isolated_database) as conn:
+        evidence_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(analysis_evidence)").fetchall()
+        }
+        correction_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(analysis_corrections)").fetchall()
+        }
+        indexes = {
+            row[1] for row in conn.execute("PRAGMA index_list(analysis_evidence)").fetchall()
+        }
+
+    assert {"status", "error_code", "error_detail", "loudness_db"} <= evidence_columns
+    assert "base_evidence_id" in correction_columns
+    assert "idx_analysis_evidence_status_created" in indexes
+
+
+def test_generated_evidence_ids_preserve_latest_order_with_timestamp_ties(
+    isolated_database: Path,
+) -> None:
+    repository = AnalysisEvidenceRepository()
+    first = repository.append_evidence(
+        track_id="track-order",
+        provider="librosa",
+        analysis_version="canonical-mir-v1",
+        bpm=138.0,
+        bpm_confidence=0.8,
+        key_tonic="F#",
+        key_scale="minor",
+        camelot="11A",
+        key_confidence=0.8,
+        energy=0.7,
+    )
+    second = repository.append_evidence(
+        track_id="track-order",
+        provider="librosa",
+        analysis_version="canonical-mir-v1",
+        bpm=140.0,
+        bpm_confidence=0.8,
+        key_tonic="F#",
+        key_scale="minor",
+        camelot="11A",
+        key_confidence=0.8,
+        energy=0.7,
+    )
+
+    assert second.evidence_id > first.evidence_id
+    assert repository.latest_evidence_for_track("track-order") == second
