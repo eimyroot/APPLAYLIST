@@ -156,10 +156,13 @@ class TrackImportBatchResult:
     candidates: tuple[TrackImportCandidate, ...]
     issues: tuple[TrackImportIssue, ...]
     source_scan_complete: bool
+    cancelled: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_scan_complete, bool):
             raise TypeError("source_scan_complete must be boolean")
+        if not isinstance(self.cancelled, bool):
+            raise TypeError("cancelled must be boolean")
         track_ids = tuple(candidate.identity.track_id for candidate in self.candidates)
         if len(set(track_ids)) != len(track_ids):
             raise ValueError("import candidates must have unique track ids")
