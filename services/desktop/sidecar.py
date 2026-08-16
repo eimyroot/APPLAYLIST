@@ -11,6 +11,10 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, TextIO
 
+from services.desktop.analysis_transport import (
+    DesktopAnalysisTransport,
+    DesktopAnalysisTransportError,
+)
 from services.desktop.library_import import (
     DesktopLibraryImportError,
     DesktopLibraryImportPhase,
@@ -22,6 +26,7 @@ PROTOCOL_VERSION = "applaylist-sidecar-v1"
 MAX_STARTUP_BYTES = 8_192
 MAX_HEADER_BYTES = 512
 MAX_IMPORT_REQUEST_BYTES = 16_384
+MAX_ANALYSIS_REQUEST_BYTES = 3 * 1024 * 1024
 MAX_LIBRARY_ROOT_CHARS = 4_096
 SECRET_HEADER = "X-APPLAYLIST-Sidecar-Secret"
 NONCE_HEADER = "X-APPLAYLIST-Readiness-Nonce"
@@ -239,6 +244,7 @@ class _SidecarHTTPServer(ThreadingHTTPServer):
         self.library_import = DesktopLibraryImportService()
         self.library_import_lock = threading.Lock()
         self.library_import_session = _LibraryImportSession(self.library_import_lock)
+        self.analysis = DesktopAnalysisTransport()
         super().__init__(("127.0.0.1", 0), _SidecarRequestHandler)
 
 
@@ -289,6 +295,27 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
         if self.path == "/v1/library/import/cancel":
             self._handle_library_import_cancel()
             return
+        if self.path == "/v1/analysis/start":
+            self._handle_analysis_start()
+            return
+        if self.path == "/v1/analysis/status":
+            self._handle_analysis_status()
+            return
+        if self.path == "/v1/analysis/cancel":
+            self._handle_analysis_cancel()
+            return
+        if self.path == "/v1/analysis/inspector/list":
+            self._handle_analysis_inspector_list()
+            return
+        if self.path == "/v1/analysis/inspector/get":
+            self._handle_analysis_inspector_get()
+            return
+        if self.path == "/v1/analysis/correct":
+            self._handle_analysis_correct()
+            return
+        if self.path == "/v1/analysis/reanalyze":
+            self._handle_analysis_reanalyze()
+            return
         if self.path != "/v1/shutdown":
             self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
@@ -301,6 +328,7 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
 
         if self.sidecar_server.library_import_session.is_active():
             self.sidecar_server.library_import_session.cancel()
+        self.sidecar_server.analysis.request_active_cancel()
         self.sidecar_server.shutdown_requested.set()
         self._write_json(HTTPStatus.ACCEPTED, {"status": "shutting_down"})
         threading.Thread(
@@ -359,6 +387,144 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
             return
         self._write_json(HTTPStatus.ACCEPTED, session.cancel())
 
+    def _handle_analysis_start(self) -> None:
+        payload = self._analysis_payload()
+        if payload is None:
+            return
+        if "track_ids" not in payload or set(payload) - {"track_ids", "preferred_provider"}:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return
+        track_ids = payload.get("track_ids")
+        if not isinstance(track_ids, list):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return
+        try:
+            snapshot = self.sidecar_server.analysis.start(
+                track_ids=track_ids,
+                preferred_provider=payload.get("preferred_provider"),  # type: ignore[arg-type]
+            )
+        except DesktopAnalysisTransportError as exc:
+            self._write_analysis_error(exc)
+            return
+        self._write_json(HTTPStatus.ACCEPTED, snapshot)
+
+    def _handle_analysis_status(self) -> None:
+        payload = self._analysis_payload()
+        if payload is None:
+            return
+        if set(payload) != {"job_id"}:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return
+        try:
+            snapshot = self.sidecar_server.analysis.status(payload.get("job_id"))  # type: ignore[arg-type]
+        except DesktopAnalysisTransportError as exc:
+            self._write_analysis_error(exc)
+            return
+        self._write_json(HTTPStatus.OK, snapshot)
+
+    def _handle_analysis_cancel(self) -> None:
+        payload = self._analysis_payload()
+        if payload is None:
+            return
+        if set(payload) != {"job_id"}:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return
+        try:
+            snapshot = self.sidecar_server.analysis.cancel(payload.get("job_id"))  # type: ignore[arg-type]
+        except DesktopAnalysisTransportError as exc:
+            self._write_analysis_error(exc)
+            return
+        self._write_json(HTTPStatus.ACCEPTED, snapshot)
+
+    def _handle_analysis_inspector_list(self) -> None:
+        payload = self._analysis_payload()
+        if payload is None:
+            return
+        if set(payload) - {"filter"}:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return
+        try:
+            result = self.sidecar_server.analysis.list_inspector(
+                payload.get("filter", "all")  # type: ignore[arg-type]
+            )
+        except DesktopAnalysisTransportError as exc:
+            self._write_analysis_error(exc)
+            return
+        self._write_json(HTTPStatus.OK, result)
+
+    def _handle_analysis_inspector_get(self) -> None:
+        payload = self._analysis_payload()
+        if payload is None:
+            return
+        if set(payload) != {"track_id"}:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return
+        try:
+            result = self.sidecar_server.analysis.get_inspector_item(payload.get("track_id"))
+        except DesktopAnalysisTransportError as exc:
+            self._write_analysis_error(exc)
+            return
+        self._write_json(HTTPStatus.OK, result)
+
+    def _handle_analysis_correct(self) -> None:
+        payload = self._analysis_payload()
+        if payload is None:
+            return
+        if (
+            "track_id" not in payload
+            or "values" not in payload
+            or set(payload) - {"track_id", "values", "reason"}
+            or not isinstance(payload.get("values"), dict)
+        ):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return
+        try:
+            result = self.sidecar_server.analysis.correct(
+                track_id=payload.get("track_id"),  # type: ignore[arg-type]
+                values=payload["values"],  # type: ignore[arg-type]
+                reason=payload.get("reason"),  # type: ignore[arg-type]
+            )
+        except DesktopAnalysisTransportError as exc:
+            self._write_analysis_error(exc)
+            return
+        self._write_json(HTTPStatus.OK, result)
+
+    def _handle_analysis_reanalyze(self) -> None:
+        payload = self._analysis_payload()
+        if payload is None:
+            return
+        if "track_id" not in payload or set(payload) - {"track_id", "preferred_provider"}:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return
+        try:
+            snapshot = self.sidecar_server.analysis.reanalyze(
+                track_id=payload.get("track_id"),  # type: ignore[arg-type]
+                preferred_provider=payload.get("preferred_provider"),  # type: ignore[arg-type]
+            )
+        except DesktopAnalysisTransportError as exc:
+            self._write_analysis_error(exc)
+            return
+        self._write_json(HTTPStatus.ACCEPTED, snapshot)
+
+    def _analysis_payload(self) -> dict[str, object] | None:
+        if not self._authorized():
+            self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
+            return None
+        payload = self._read_json_payload(MAX_ANALYSIS_REQUEST_BYTES)
+        if payload is None:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_analysis_request"})
+            return None
+        return payload
+
+    def _write_analysis_error(self, error: DesktopAnalysisTransportError) -> None:
+        if error.code == "analysis_busy":
+            status = HTTPStatus.CONFLICT
+        elif error.code in {"unknown_analysis_job", "analysis_item_not_found"}:
+            status = HTTPStatus.NOT_FOUND
+        else:
+            status = HTTPStatus.BAD_REQUEST
+        self._write_json(status, {"error": error.code})
+
     def _validated_import_folder(self) -> str | None:
         payload = self._read_import_payload()
         if payload is None:
@@ -377,6 +543,12 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
         return folder
 
     def _read_import_payload(self) -> dict[str, object] | None:
+        payload = self._read_json_payload(MAX_IMPORT_REQUEST_BYTES)
+        if payload is None or set(payload) != {"folder"}:
+            return None
+        return payload
+
+    def _read_json_payload(self, maximum_bytes: int) -> dict[str, object] | None:
         if self.headers.get("Transfer-Encoding") is not None:
             return None
         content_type = self.headers.get("Content-Type", "")
@@ -389,7 +561,7 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
             length = int(raw_length)
         except ValueError:
             return None
-        if length <= 0 or length > MAX_IMPORT_REQUEST_BYTES:
+        if length <= 0 or length > maximum_bytes:
             return None
         body = self.rfile.read(length)
         if len(body) != length:
@@ -398,7 +570,7 @@ class _SidecarRequestHandler(BaseHTTPRequestHandler):
             payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             return None
-        if not isinstance(payload, dict) or set(payload) != {"folder"}:
+        if not isinstance(payload, dict):
             return None
         return payload
 
@@ -492,6 +664,7 @@ def run_sidecar(
         stop_requested.set()
         if server.library_import_session.is_active():
             server.library_import_session.cancel()
+        server.analysis.request_active_cancel()
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     previous_sigterm = signal.signal(signal.SIGTERM, request_stop)
@@ -501,6 +674,7 @@ def run_sidecar(
     finally:
         if server.library_import_session.is_active():
             server.library_import_session.cancel()
+        server.analysis.request_active_cancel()
         server.server_close()
         signal.signal(signal.SIGTERM, previous_sigterm)
         signal.signal(signal.SIGINT, previous_sigint)
