@@ -19,7 +19,12 @@ class AnalysisEvidenceRecord:
     camelot: str | None = None
     key_confidence: float | None = None
     energy: float | None = None
+    loudness_db: float | None = None
     duration_seconds: float | None = None
+    beat_stability: float | None = None
+    harmonic_ratio: float | None = None
+    percussive_ratio: float | None = None
+    genre_hint: str | None = None
     warnings: tuple[str, ...] = ()
     error_code: str | None = None
     error_detail: str | None = None
@@ -30,6 +35,7 @@ class AnalysisEvidenceRecord:
 class AnalysisCorrectionRecord:
     correction_id: str
     track_id: str
+    base_evidence_id: str
     payload_json: str
     reason: str | None = None
     created_at: str | None = None
