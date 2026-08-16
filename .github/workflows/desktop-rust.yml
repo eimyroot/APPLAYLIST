@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   rust-host:
-    name: macOS / Rust 1.77.2
+    name: macOS / Rust 1.88.0
     runs-on: macos-latest
     timeout-minutes: 20
 
@@ -35,8 +35,8 @@ jobs:
 
       - name: Install pinned Rust toolchain
         run: |
-          rustup toolchain install 1.77.2 --profile minimal --component rustfmt
-          rustup override set 1.77.2
+          rustup toolchain install 1.88.0 --profile minimal --component rustfmt
+          rustup override set 1.88.0
           rustc --version
           cargo --version
 
