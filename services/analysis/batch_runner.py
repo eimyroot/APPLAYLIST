@@ -26,6 +26,8 @@ class AnalysisBatchRunner:
         job = self._jobs.get_job(job_id)
         if job is None:
             raise KeyError("unknown analysis job")
+        if job.cancel_requested or job.status == "cancelling":
+            return self._jobs.finish(job_id)
         if job.status != "pending":
             raise ValueError("analysis batch runner requires a pending job")
 
