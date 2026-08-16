@@ -4,7 +4,10 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::mpsc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -27,6 +30,7 @@ const NONCE_HEADER: &str = "X-APPLAYLIST-Readiness-Nonce";
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 const IMPORT_TIMEOUT: Duration = Duration::from_secs(300);
+const IMPORT_POLL_INTERVAL: Duration = Duration::from_millis(125);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_READY_BYTES: usize = 8_192;
 const MAX_HTTP_RESPONSE_BYTES: u64 = 32 * 1024 * 1024;
@@ -95,6 +99,24 @@ impl SidecarBridge {
         root: &Path,
         bundled_resource_dir: Option<&Path>,
     ) -> Result<DesktopLibraryImportResultDto, SidecarBridgeError> {
+        self.run_import_lifecycle_with_resource_dir(
+            root,
+            bundled_resource_dir,
+            Arc::new(AtomicBool::new(false)),
+            |_| {},
+        )
+    }
+
+    pub(crate) fn run_import_lifecycle_with_resource_dir<F>(
+        &self,
+        root: &Path,
+        bundled_resource_dir: Option<&Path>,
+        cancel_requested: Arc<AtomicBool>,
+        mut progress_updated: F,
+    ) -> Result<DesktopLibraryImportResultDto, SidecarBridgeError>
+    where
+        F: FnMut(SidecarImportProgressDto),
+    {
         if !root.is_absolute() || !root.is_dir() {
             return Err(SidecarBridgeError::invalid_root());
         }
@@ -114,20 +136,85 @@ impl SidecarBridge {
         let (status, response) = request_json(
             ready.port,
             "POST",
-            "/v1/library/import",
+            "/v1/library/import/start",
             &secret,
             &nonce,
             Some(&request),
-            IMPORT_TIMEOUT,
+            HTTP_TIMEOUT,
         )?;
-        if status != 200 {
+        if status != 202 {
             return Err(SidecarBridgeError::import_rejected());
         }
-        let result = serde_json::from_slice::<DesktopLibraryImportResultDto>(&response)
-            .map_err(|_| SidecarBridgeError::invalid_import_response())?;
 
-        process.shutdown(ready.port, &secret, &nonce);
-        Ok(result)
+        let mut lifecycle = parse_lifecycle_response(&response)?;
+        progress_updated(lifecycle.progress());
+        let deadline = Instant::now() + IMPORT_TIMEOUT;
+        let mut cancel_sent = false;
+        let mut previous_counts = lifecycle.counts.clone();
+
+        loop {
+            if lifecycle.terminal {
+                let final_state = lifecycle.state.as_str();
+                let result = match final_state {
+                    "succeeded" | "cancelled" => lifecycle
+                        .result
+                        .take()
+                        .ok_or_else(SidecarBridgeError::invalid_import_response)?,
+                    "failed" => {
+                        return Err(match lifecycle.error_code.as_deref() {
+                            Some("invalid_library_root") => SidecarBridgeError::invalid_root(),
+                            _ => SidecarBridgeError::import_rejected(),
+                        });
+                    }
+                    _ => return Err(SidecarBridgeError::invalid_import_response()),
+                };
+                process.shutdown(ready.port, &secret, &nonce);
+                return Ok(result);
+            }
+
+            if Instant::now() >= deadline {
+                return Err(SidecarBridgeError::import_timeout());
+            }
+
+            if cancel_requested.load(Ordering::Acquire) && !cancel_sent {
+                let (cancel_status, cancel_body) = request_json(
+                    ready.port,
+                    "POST",
+                    "/v1/library/import/cancel",
+                    &secret,
+                    &nonce,
+                    Some(&[]),
+                    HTTP_TIMEOUT,
+                )?;
+                if cancel_status != 202 {
+                    return Err(SidecarBridgeError::cancel_rejected());
+                }
+                lifecycle = parse_lifecycle_response(&cancel_body)?;
+                validate_monotonic_counts(&previous_counts, &lifecycle.counts)?;
+                previous_counts = lifecycle.counts.clone();
+                progress_updated(lifecycle.progress());
+                cancel_sent = true;
+                continue;
+            }
+
+            thread::sleep(IMPORT_POLL_INTERVAL);
+            let (poll_status, poll_body) = request_json(
+                ready.port,
+                "GET",
+                "/v1/library/import/status",
+                &secret,
+                &nonce,
+                None,
+                HTTP_TIMEOUT,
+            )?;
+            if poll_status != 200 {
+                return Err(SidecarBridgeError::request_failed());
+            }
+            lifecycle = parse_lifecycle_response(&poll_body)?;
+            validate_monotonic_counts(&previous_counts, &lifecycle.counts)?;
+            previous_counts = lifecycle.counts.clone();
+            progress_updated(lifecycle.progress());
+        }
     }
 }
 
@@ -214,6 +301,20 @@ impl SidecarBridgeError {
         }
     }
 
+    const fn import_timeout() -> Self {
+        Self {
+            code: "desktop_library_import_timeout",
+            message: "The desktop library import exceeded its bounded runtime.",
+        }
+    }
+
+    const fn cancel_rejected() -> Self {
+        Self {
+            code: "desktop_library_import_cancel_rejected",
+            message: "The desktop library import cancellation was rejected.",
+        }
+    }
+
     const fn invalid_import_response() -> Self {
         Self {
             code: "desktop_library_import_response_invalid",
@@ -294,6 +395,79 @@ pub struct DesktopLibraryCountsDto {
     pub(crate) accepted: usize,
     pub(crate) imported: usize,
     pub(crate) persisted: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SidecarImportProgressDto {
+    pub(crate) state: String,
+    pub(crate) phase: String,
+    pub(crate) counts: DesktopLibraryCountsDto,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SidecarImportLifecycleDto {
+    state: String,
+    phase: String,
+    counts: DesktopLibraryCountsDto,
+    terminal: bool,
+    result: Option<DesktopLibraryImportResultDto>,
+    error_code: Option<String>,
+}
+
+impl SidecarImportLifecycleDto {
+    fn progress(&self) -> SidecarImportProgressDto {
+        SidecarImportProgressDto {
+            state: self.state.clone(),
+            phase: self.phase.clone(),
+            counts: self.counts.clone(),
+        }
+    }
+}
+
+fn parse_lifecycle_response(body: &[u8]) -> Result<SidecarImportLifecycleDto, SidecarBridgeError> {
+    let lifecycle = serde_json::from_slice::<SidecarImportLifecycleDto>(body)
+        .map_err(|_| SidecarBridgeError::invalid_import_response())?;
+    if !matches!(
+        lifecycle.state.as_str(),
+        "pending" | "running" | "cancelling" | "succeeded" | "cancelled" | "failed"
+    ) || !matches!(
+        lifecycle.phase.as_str(),
+        "starting" | "scanning" | "importing" | "persisting" | "finalizing"
+    ) {
+        return Err(SidecarBridgeError::invalid_import_response());
+    }
+    let should_be_terminal = matches!(lifecycle.state.as_str(), "succeeded" | "cancelled" | "failed");
+    if lifecycle.terminal != should_be_terminal {
+        return Err(SidecarBridgeError::invalid_import_response());
+    }
+    if lifecycle.counts.persisted > lifecycle.counts.imported
+        || lifecycle.counts.imported > lifecycle.counts.accepted
+        || lifecycle.counts.accepted > lifecycle.counts.discovered_entries
+    {
+        return Err(SidecarBridgeError::invalid_import_response());
+    }
+    if matches!(lifecycle.state.as_str(), "succeeded" | "cancelled")
+        && lifecycle.terminal
+        && lifecycle.result.is_none()
+    {
+        return Err(SidecarBridgeError::invalid_import_response());
+    }
+    Ok(lifecycle)
+}
+
+fn validate_monotonic_counts(
+    previous: &DesktopLibraryCountsDto,
+    next: &DesktopLibraryCountsDto,
+) -> Result<(), SidecarBridgeError> {
+    if next.discovered_entries < previous.discovered_entries
+        || next.accepted < previous.accepted
+        || next.imported < previous.imported
+        || next.persisted < previous.persisted
+    {
+        return Err(SidecarBridgeError::invalid_import_response());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -562,6 +736,24 @@ mod tests {
     }
 
     #[test]
+    fn lifecycle_dto_rejects_path_leak_and_invalid_counter_order() {
+        let leaked = br#"{
+          "state":"running","phase":"scanning",
+          "counts":{"discovered_entries":1,"accepted":0,"imported":0,"persisted":0},
+          "terminal":false,"result":null,"error_code":null,
+          "root":"/Users/example/Music"
+        }"#;
+        assert!(parse_lifecycle_response(leaked).is_err());
+
+        let impossible = br#"{
+          "state":"running","phase":"importing",
+          "counts":{"discovered_entries":1,"accepted":0,"imported":1,"persisted":0},
+          "terminal":false,"result":null,"error_code":null
+        }"#;
+        assert!(parse_lifecycle_response(impossible).is_err());
+    }
+
+    #[test]
     fn readiness_requires_loopback_protocol_and_nonce_binding() {
         let nonce = "n".repeat(64);
         let valid = SidecarReady {
@@ -742,7 +934,7 @@ mod import_timeout_regression_tests {
     fn request_json_respects_supplied_read_timeout_for_long_import_budget() {
         assert!(
             IMPORT_TIMEOUT > HTTP_TIMEOUT,
-            "import response timeout must remain longer than the control-plane timeout"
+            "import lifecycle budget must remain longer than the control-plane timeout"
         );
 
         let (short_port, short_server) =
