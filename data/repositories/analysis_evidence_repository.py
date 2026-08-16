@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 from collections.abc import Mapping
 from uuid import uuid4
 
@@ -45,10 +46,6 @@ class AnalysisEvidenceRepository:
                     error_detail TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                CREATE INDEX IF NOT EXISTS idx_analysis_evidence_track_created
-                    ON analysis_evidence(track_id, created_at, evidence_id);
-                CREATE INDEX IF NOT EXISTS idx_analysis_evidence_status_created
-                    ON analysis_evidence(status, created_at, evidence_id);
 
                 CREATE TABLE IF NOT EXISTS analysis_corrections (
                     correction_id TEXT PRIMARY KEY,
@@ -58,13 +55,21 @@ class AnalysisEvidenceRepository:
                     reason TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+                '''
+            )
+            self._ensure_columns(conn)
+            conn.executescript(
+                '''
+                CREATE INDEX IF NOT EXISTS idx_analysis_evidence_track_created
+                    ON analysis_evidence(track_id, created_at, evidence_id);
+                CREATE INDEX IF NOT EXISTS idx_analysis_evidence_status_created
+                    ON analysis_evidence(status, created_at, evidence_id);
                 CREATE INDEX IF NOT EXISTS idx_analysis_corrections_track_created
                     ON analysis_corrections(track_id, created_at, correction_id);
                 CREATE INDEX IF NOT EXISTS idx_analysis_corrections_base_created
                     ON analysis_corrections(base_evidence_id, created_at, correction_id);
                 '''
             )
-            self._ensure_columns(conn)
             conn.commit()
 
     def append_evidence(
@@ -113,7 +118,7 @@ class AnalysisEvidenceRepository:
             raise ValueError("failed analysis evidence requires an error_code")
 
         record = AnalysisEvidenceRecord(
-            evidence_id=evidence_id or f"ae_{uuid4().hex}",
+            evidence_id=evidence_id or self._ordered_id("ae"),
             track_id=normalized_track_id,
             provider=normalized_provider,
             analysis_version=normalized_analysis_version,
@@ -238,7 +243,7 @@ class AnalysisEvidenceRepository:
         payload = self._normalize_correction_values(values)
         payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         record = AnalysisCorrectionRecord(
-            correction_id=correction_id or f"ac_{uuid4().hex}",
+            correction_id=correction_id or self._ordered_id("ac"),
             track_id=normalized_track_id,
             base_evidence_id=normalized_base_evidence_id,
             payload_json=payload_json,
@@ -407,6 +412,10 @@ class AnalysisEvidenceRepository:
                 "ALTER TABLE analysis_corrections "
                 "ADD COLUMN base_evidence_id TEXT NOT NULL DEFAULT ''"
             )
+
+    @staticmethod
+    def _ordered_id(prefix: str) -> str:
+        return f"{prefix}_{time.time_ns():020d}_{uuid4().hex}"
 
     @staticmethod
     def _normalize_status(value: str) -> str:
