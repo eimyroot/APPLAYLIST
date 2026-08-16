@@ -437,7 +437,10 @@ fn parse_lifecycle_response(body: &[u8]) -> Result<SidecarImportLifecycleDto, Si
     ) {
         return Err(SidecarBridgeError::invalid_import_response());
     }
-    let should_be_terminal = matches!(lifecycle.state.as_str(), "succeeded" | "cancelled" | "failed");
+    let should_be_terminal = matches!(
+        lifecycle.state.as_str(),
+        "succeeded" | "cancelled" | "failed"
+    );
     if lifecycle.terminal != should_be_terminal {
         return Err(SidecarBridgeError::invalid_import_response());
     }
