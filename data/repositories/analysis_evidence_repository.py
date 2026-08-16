@@ -21,6 +21,8 @@ class AnalysisEvidenceRepository:
                     track_id TEXT NOT NULL,
                     provider TEXT NOT NULL,
                     analysis_version TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'succeeded'
+                        CHECK (status IN ('succeeded', 'failed')),
                     provider_version TEXT,
                     algorithm_version TEXT,
                     bpm REAL,
@@ -32,10 +34,14 @@ class AnalysisEvidenceRepository:
                     energy REAL,
                     duration_seconds REAL,
                     warnings_json TEXT NOT NULL DEFAULT '[]',
+                    error_code TEXT,
+                    error_detail TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
                 CREATE INDEX IF NOT EXISTS idx_analysis_evidence_track_created
                     ON analysis_evidence(track_id, created_at, evidence_id);
+                CREATE INDEX IF NOT EXISTS idx_analysis_evidence_status_created
+                    ON analysis_evidence(status, created_at, evidence_id);
 
                 CREATE TABLE IF NOT EXISTS analysis_corrections (
                     correction_id TEXT PRIMARY KEY,
@@ -48,6 +54,7 @@ class AnalysisEvidenceRepository:
                     ON analysis_corrections(track_id, created_at, correction_id);
                 '''
             )
+            self._ensure_outcome_columns(conn)
             conn.commit()
 
     def append_evidence(
@@ -56,6 +63,7 @@ class AnalysisEvidenceRepository:
         track_id: str,
         provider: str,
         analysis_version: str,
+        status: str = "succeeded",
         provider_version: str | None = None,
         algorithm_version: str | None = None,
         bpm: float | None = None,
@@ -67,6 +75,8 @@ class AnalysisEvidenceRepository:
         energy: float | None = None,
         duration_seconds: float | None = None,
         warnings: tuple[str, ...] = (),
+        error_code: str | None = None,
+        error_detail: str | None = None,
         evidence_id: str | None = None,
     ) -> AnalysisEvidenceRecord:
         normalized_track_id = self._required_text(track_id, "track_id", 256)
@@ -76,12 +86,23 @@ class AnalysisEvidenceRepository:
             "analysis_version",
             128,
         )
+        normalized_status = self._normalize_status(status)
         normalized_warnings = self._normalize_warnings(warnings)
+        normalized_error_code = self._optional_text(error_code, 128)
+        normalized_error_detail = self._optional_text(error_detail, 512)
+        if normalized_status == "succeeded" and (
+            normalized_error_code is not None or normalized_error_detail is not None
+        ):
+            raise ValueError("successful analysis evidence cannot contain failure details")
+        if normalized_status == "failed" and normalized_error_code is None:
+            raise ValueError("failed analysis evidence requires an error_code")
+
         record = AnalysisEvidenceRecord(
             evidence_id=evidence_id or f"ae_{uuid4().hex}",
             track_id=normalized_track_id,
             provider=normalized_provider,
             analysis_version=normalized_analysis_version,
+            status=normalized_status,
             provider_version=self._optional_text(provider_version, 128),
             algorithm_version=self._optional_text(algorithm_version, 128),
             bpm=self._optional_number(bpm, "bpm", minimum=1.0, maximum=400.0),
@@ -108,24 +129,27 @@ class AnalysisEvidenceRepository:
                 maximum=None,
             ),
             warnings=normalized_warnings,
+            error_code=normalized_error_code,
+            error_detail=normalized_error_detail,
         )
         self.ensure_schema()
         with get_sqlite_connection() as conn:
             conn.execute(
                 '''
                 INSERT INTO analysis_evidence (
-                    evidence_id, track_id, provider, analysis_version,
+                    evidence_id, track_id, provider, analysis_version, status,
                     provider_version, algorithm_version, bpm, bpm_confidence,
                     key_tonic, key_scale, camelot, key_confidence, energy,
-                    duration_seconds, warnings_json
+                    duration_seconds, warnings_json, error_code, error_detail
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 (
                     record.evidence_id,
                     record.track_id,
                     record.provider,
                     record.analysis_version,
+                    record.status,
                     record.provider_version,
                     record.algorithm_version,
                     record.bpm,
@@ -137,6 +161,8 @@ class AnalysisEvidenceRepository:
                     record.energy,
                     record.duration_seconds,
                     json.dumps(record.warnings, separators=(",", ":")),
+                    record.error_code,
+                    record.error_detail,
                 ),
             )
             conn.commit()
@@ -237,6 +263,31 @@ class AnalysisEvidenceRepository:
         if row is None:
             return None
         return AnalysisCorrectionRecord(**dict(row))
+
+    @staticmethod
+    def _ensure_outcome_columns(conn: object) -> None:
+        columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(analysis_evidence)").fetchall()  # type: ignore[attr-defined]
+        }
+        for name, declaration in (
+            ("status", "TEXT NOT NULL DEFAULT 'succeeded'"),
+            ("error_code", "TEXT"),
+            ("error_detail", "TEXT"),
+        ):
+            if name not in columns:
+                conn.execute(  # type: ignore[attr-defined]
+                    f"ALTER TABLE analysis_evidence ADD COLUMN {name} {declaration}"
+                )
+
+    @staticmethod
+    def _normalize_status(value: str) -> str:
+        if not isinstance(value, str):
+            raise TypeError("analysis evidence status must be text")
+        normalized = value.strip().lower()
+        if normalized not in {"succeeded", "failed"}:
+            raise ValueError("analysis evidence status must be succeeded or failed")
+        return normalized
 
     @staticmethod
     def _required_text(value: str, field: str, maximum_length: int) -> str:
@@ -344,6 +395,7 @@ class AnalysisEvidenceRepository:
             track_id=str(row["track_id"]),
             provider=str(row["provider"]),
             analysis_version=str(row["analysis_version"]),
+            status=str(row["status"]),
             provider_version=(
                 str(row["provider_version"])
                 if row["provider_version"] is not None
@@ -375,5 +427,11 @@ class AnalysisEvidenceRepository:
                 else None
             ),
             warnings=tuple(warnings),
+            error_code=(str(row["error_code"]) if row["error_code"] is not None else None),
+            error_detail=(
+                str(row["error_detail"])
+                if row["error_detail"] is not None
+                else None
+            ),
             created_at=(str(row["created_at"]) if row["created_at"] is not None else None),
         )
