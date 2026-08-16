@@ -22,6 +22,27 @@ def isolated_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     get_settings.cache_clear()
 
 
+def _success_evidence(
+    repository: AnalysisEvidenceRepository,
+    *,
+    evidence_id: str,
+    track_id: str,
+) -> str:
+    return repository.append_evidence(
+        evidence_id=evidence_id,
+        track_id=track_id,
+        provider="librosa",
+        analysis_version="canonical-mir-v1",
+        bpm=140.0,
+        bpm_confidence=0.8,
+        key_tonic="F#",
+        key_scale="minor",
+        camelot="11A",
+        key_confidence=0.8,
+        energy=0.7,
+    ).evidence_id
+
+
 def test_analysis_job_contract_rejects_invalid_counts() -> None:
     with pytest.raises(ValueError, match="completed must equal"):
         AnalysisJobCounts(selected=2, completed=1, succeeded=0, failed=0)
@@ -36,21 +57,36 @@ def test_analysis_job_contract_rejects_invalid_counts() -> None:
         )
 
 
-def test_analysis_job_persists_monotonic_progress_and_cancel(
+def test_analysis_job_persists_scope_progress_and_cancel(
     isolated_database: Path,
 ) -> None:
     service = AnalysisJobService()
-    created = service.create_job(selected=3, preferred_provider=" Librosa ")
+    evidence = AnalysisEvidenceRepository()
+    created = service.create_job(
+        track_ids=["track-a", "track-b", "track-c"],
+        preferred_provider=" Librosa ",
+    )
 
     assert created.job_id.startswith("aj_")
     assert created.status == "pending"
     assert created.preferred_provider == "librosa"
     assert created.counts == AnalysisJobCounts(selected=3)
+    assert service.get_targets(created.job_id) == ("track-a", "track-b", "track-c")
 
     running = service.mark_running(created.job_id)
     assert running.status == "running"
 
-    first = service.record_success(created.job_id, uncertain=True)
+    first_evidence = _success_evidence(
+        evidence,
+        evidence_id="ae_job_success",
+        track_id="track-a",
+    )
+    first = service.record_success(
+        created.job_id,
+        track_id="track-a",
+        evidence_id=first_evidence,
+        uncertain=True,
+    )
     assert first.counts == AnalysisJobCounts(
         selected=3,
         completed=1,
@@ -59,7 +95,21 @@ def test_analysis_job_persists_monotonic_progress_and_cancel(
         uncertain=1,
     )
 
-    second = service.record_failure(created.job_id)
+    failed_evidence = evidence.append_evidence(
+        evidence_id="ae_job_failure",
+        track_id="track-b",
+        provider="librosa",
+        analysis_version="canonical-mir-v1",
+        status="failed",
+        error_code="provider_runtime_error",
+        error_detail="Analysis provider failed for this track.",
+    )
+    second = service.record_failure(
+        created.job_id,
+        track_id="track-b",
+        evidence_id=failed_evidence.evidence_id,
+        error_code=failed_evidence.error_code or "provider_runtime_error",
+    )
     assert second.counts == AnalysisJobCounts(
         selected=3,
         completed=2,
@@ -84,18 +134,61 @@ def test_analysis_job_persists_monotonic_progress_and_cancel(
     assert isolated_database.exists()
 
 
-def test_analysis_job_completes_only_after_selected_scope(
+def test_analysis_job_scope_is_bounded_unique_and_fail_closed(
+    isolated_database: Path,
+) -> None:
+    repository = AnalysisJobRepository()
+
+    with pytest.raises(ValueError, match="at least one track"):
+        repository.create_scope(track_ids=[])
+
+    with pytest.raises(ValueError, match="duplicate"):
+        repository.create_scope(track_ids=["track-a", "track-a"])
+
+    created = repository.create_scope(track_ids=["track-a", "track-b"], job_id="aj_fixed")
+    assert repository.get_targets(created.job_id) == ("track-a", "track-b")
+
+    with pytest.raises(KeyError, match="unknown analysis job"):
+        repository.get_targets("aj_missing")
+
+    with pytest.raises(KeyError, match="outside analysis job scope"):
+        repository.record_target_outcome(
+            created.job_id,
+            track_id="track-outside",
+            status="succeeded",
+            evidence_id="ae_missing",
+        )
+
+
+def test_analysis_job_completes_only_after_all_target_outcomes(
     isolated_database: Path,
 ) -> None:
     service = AnalysisJobService()
-    created = service.create_job(selected=2)
+    evidence = AnalysisEvidenceRepository()
+    created = service.create_job(track_ids=["track-a", "track-b"])
     service.mark_running(created.job_id)
-    service.record_success(created.job_id)
+    service.record_success(
+        created.job_id,
+        track_id="track-a",
+        evidence_id=_success_evidence(
+            evidence,
+            evidence_id="ae_complete_1",
+            track_id="track-a",
+        ),
+    )
 
     with pytest.raises(ValueError, match="cannot finish before"):
         service.finish(created.job_id)
 
-    service.record_success(created.job_id)
+    service.record_success(
+        created.job_id,
+        track_id="track-b",
+        evidence_id=_success_evidence(
+            evidence,
+            evidence_id="ae_complete_2",
+            track_id="track-b",
+        ),
+    )
     done = service.finish(created.job_id)
     assert done.status == "done"
     assert done.counts == AnalysisJobCounts(
@@ -114,40 +207,33 @@ def test_analysis_job_completes_only_after_selected_scope(
         )
 
 
-def test_analysis_job_repository_rejects_regression_and_unknown_job(
+def test_analysis_job_rejects_duplicate_target_outcome(
     isolated_database: Path,
 ) -> None:
-    repository = AnalysisJobRepository()
-    created = repository.create(selected=2, job_id="aj_fixed")
-    progressed = repository.update(
-        created.job_id,
-        status="running",
-        counts=AnalysisJobCounts(
-            selected=2,
-            completed=1,
-            succeeded=1,
-            failed=0,
-            uncertain=0,
-        ),
+    service = AnalysisJobService()
+    evidence = AnalysisEvidenceRepository()
+    created = service.create_job(track_ids=["track-a"])
+    service.mark_running(created.job_id)
+    evidence_id = _success_evidence(
+        evidence,
+        evidence_id="ae_once",
+        track_id="track-a",
     )
-    assert progressed.counts.completed == 1
+    service.record_success(
+        created.job_id,
+        track_id="track-a",
+        evidence_id=evidence_id,
+    )
 
-    with pytest.raises(ValueError, match="must be monotonic"):
-        repository.update(
+    with pytest.raises(ValueError, match="already complete|already recorded"):
+        service.record_success(
             created.job_id,
-            status="running",
-            counts=AnalysisJobCounts(selected=2),
-        )
-
-    with pytest.raises(KeyError, match="unknown analysis job"):
-        repository.update(
-            "aj_missing",
-            status="running",
-            counts=AnalysisJobCounts(selected=1),
+            track_id="track-a",
+            evidence_id=evidence_id,
         )
 
 
-def test_analysis_evidence_and_corrections_are_append_only(
+def test_analysis_evidence_and_corrections_are_append_only_and_anchored(
     isolated_database: Path,
 ) -> None:
     repository = AnalysisEvidenceRepository()
@@ -187,24 +273,36 @@ def test_analysis_evidence_and_corrections_are_append_only(
     )
 
     assert first.evidence_id != second.evidence_id
-    latest = repository.latest_evidence_for_track("track-1")
-    assert latest is not None
-    assert latest.evidence_id == "ae_0002"
-    assert latest.warnings == ()
+    assert repository.latest_evidence_for_track("track-1") == second
+    assert repository.latest_success_for_track("track-1") == second
 
     correction = repository.append_correction(
         correction_id="ac_0001",
         track_id="track-1",
+        base_evidence_id=second.evidence_id,
         values={"bpm": 140.0, "camelot": "11A"},
         reason="confirmed on deck",
     )
     assert json.loads(correction.payload_json) == {"bpm": 140.0, "camelot": "11A"}
-    assert correction.reason == "confirmed on deck"
-    assert repository.latest_correction_for_track("track-1") == correction
+    assert correction.base_evidence_id == second.evidence_id
+    assert repository.latest_active_correction("track-1", second.evidence_id) == correction
+
+    failed = repository.append_evidence(
+        evidence_id="ae_0003",
+        track_id="track-1",
+        provider="librosa",
+        analysis_version="canonical-mir-v1",
+        status="failed",
+        error_code="provider_runtime_error",
+        error_detail="Analysis provider failed for this track.",
+    )
+    assert repository.latest_evidence_for_track("track-1") == failed
+    assert repository.latest_success_for_track("track-1") == second
+    assert repository.latest_active_correction("track-1", second.evidence_id) == correction
 
     with pytest.raises(sqlite3.IntegrityError):
         repository.append_evidence(
-            evidence_id="ae_0002",
+            evidence_id="ae_0003",
             track_id="track-1",
             provider="librosa",
             analysis_version="canonical-mir-v1",
@@ -213,5 +311,13 @@ def test_analysis_evidence_and_corrections_are_append_only(
     with pytest.raises(ValueError, match="unsupported fields"):
         repository.append_correction(
             track_id="track-1",
+            base_evidence_id=second.evidence_id,
             values={"path": "/must/not/be/stored"},
+        )
+
+    with pytest.raises(ValueError, match="same track"):
+        repository.append_correction(
+            track_id="other-track",
+            base_evidence_id=second.evidence_id,
+            values={"bpm": 140.0},
         )
