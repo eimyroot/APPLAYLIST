@@ -88,5 +88,5 @@ def test_analyze_real_tracks_uses_byte_sha256_not_inventory_signature(tmp_path: 
     assert evidence.content_sha256 == content_sha256
     assert evidence.source.file_signature == inventory_signature
     assert evidence.music_dna.identity.content_identity == f"sha256:{content_sha256}"
-    assert evidence.music_dna.evidence.input_identity == f"sha256:{content_sha256}"
+    assert evidence.music_dna.evidence[0].input_identity == f"sha256:{content_sha256}"
     assert content_sha256 != inventory_signature
