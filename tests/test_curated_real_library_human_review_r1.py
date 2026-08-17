@@ -234,6 +234,42 @@ def test_unreviewed_case_keeps_protocol_incomplete() -> None:
     assert result.reviewed_case_fraction < 1.0
 
 
+def test_absent_reviews_are_incomplete_not_observed_integrity_failure() -> None:
+    snapshot = _snapshot()
+    cases = _cases()
+    assignments, _ = _evidence(cases)
+
+    result = evaluate_curated_real_library_human_review_r1(
+        snapshot=snapshot,
+        cases=cases,
+        assignments=assignments,
+        reviews=(),
+    )
+
+    assert result.verdict is HumanReviewProtocolVerdict.INCOMPLETE
+    assert result.reviewed_case_count == 0
+    assert result.blind_integrity_rate == 0.0
+    assert result.dimension_coverage_rate == 0.0
+    assert "human_review_protocol_incomplete" in result.explanation_codes
+    assert "blind_integrity_rate_below_threshold" not in result.explanation_codes
+    assert "dimension_coverage_rate_below_threshold" not in result.explanation_codes
+
+
+def test_duplicate_review_from_same_reviewer_and_case_is_rejected() -> None:
+    snapshot = _snapshot()
+    cases = _cases()
+    assignments, reviews = _evidence(cases)
+    duplicate = replace(reviews[0], review_id="review:duplicate")
+
+    with pytest.raises(ValueError, match="only one review per curated case"):
+        evaluate_curated_real_library_human_review_r1(
+            snapshot=snapshot,
+            cases=cases,
+            assignments=assignments,
+            reviews=(*reviews, duplicate),
+        )
+
+
 def test_dimension_gap_is_fail_closed() -> None:
     snapshot = _snapshot()
     cases = _cases()
