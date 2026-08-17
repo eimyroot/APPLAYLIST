@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from core.analysis.provider_contract import CanonicalAnalysisResult
@@ -18,7 +20,7 @@ from services.intelligence.real_library_pilot import (
 def _snapshot() -> dict:
     tracks = []
     for index in range(4):
-        signature = f"{index + 1:064x}"
+        signature = hashlib.sha256(f"track-{index}".encode("utf-8")).hexdigest()
         track_id = f"trk_{signature[:24]}"
         tracks.append(
             {
