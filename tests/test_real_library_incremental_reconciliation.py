@@ -40,12 +40,21 @@ def _snapshot(path: str = "/library/a.wav") -> dict[str, object]:
             {
                 "track_id": "snapshot-track-a",
                 "absolute_path": path,
-                "file_signature": "opaque-inventory-signature",
+                "file_signature": "opaque-inventory-signature-a",
                 "display_name": "Track A",
                 "artist": "Artist A",
                 "genre": "Techno",
                 "energy": 7,
-            }
+            },
+            {
+                "track_id": "snapshot-track-b",
+                "absolute_path": "/library/b.wav",
+                "file_signature": "opaque-inventory-signature-b",
+                "display_name": "Track B",
+                "artist": "Artist B",
+                "genre": "Techno",
+                "energy": 6,
+            },
         ],
     }
 
