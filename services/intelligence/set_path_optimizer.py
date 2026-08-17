@@ -442,11 +442,24 @@ def optimize_set_lookahead(
                     expansions.append(child)
             if budget_exhausted:
                 break
-        if budget_exhausted:
-            break
+
         if completed_nodes:
             best_completed_depth = max(len(item.added_steps) for item in completed_nodes)
             deepest_depth = max(deepest_depth, best_completed_depth)
+
+        if budget_exhausted:
+            # Preserve already explored partial evidence. A bounded search may stop before
+            # considering every sibling, but the expansions already produced are still
+            # valid deterministic path alternatives and must not disappear from the result.
+            if expansions:
+                expansions.sort(key=lambda item: _node_sort_key(intent, item))
+                if len(expansions) > optimizer_policy.beam_width:
+                    beam_pruned_candidates += len(expansions) - optimizer_policy.beam_width
+                frontier = tuple(expansions[: optimizer_policy.beam_width])
+                deepest_nodes = frontier
+                deepest_depth = max(deepest_depth, depth)
+            break
+
         if not expansions:
             break
         expansions.sort(key=lambda item: _node_sort_key(intent, item))
