@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.analysis.execution_identity import AnalysisExecutionIdentity
 from core.analysis.provider_contract import (
     CanonicalAnalysisResult,
     ProviderContractError,
@@ -17,6 +18,27 @@ INSPECTOR_CONFIDENCE_FLOOR = 0.50
 class AnalysisResultStore:
     def __init__(self, repository: AnalysisEvidenceRepository | None = None) -> None:
         self._repo = repository or AnalysisEvidenceRepository()
+
+    def reusable_success(
+        self,
+        *,
+        track_id: str,
+        execution_identity: AnalysisExecutionIdentity,
+    ) -> AnalysisEvidenceRecord | None:
+        """Return latest successful evidence only for an exact execution identity match."""
+
+        evidence = self._repo.latest_success_for_track(track_id)
+        if evidence is None:
+            return None
+        if evidence.provider != execution_identity.provider:
+            return None
+        if evidence.analysis_version != execution_identity.analysis_version:
+            return None
+        if evidence.provider_version != execution_identity.provider_version:
+            return None
+        if evidence.algorithm_version != execution_identity.algorithm_version:
+            return None
+        return evidence
 
     def persist_success(
         self,

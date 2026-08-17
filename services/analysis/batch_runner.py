@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from core.analysis.execution_identity import (
+    AnalysisExecutionIdentity,
+    is_content_addressed_track_id,
+)
 from core.analysis.provider_contract import ProviderContractError
 from core.analysis.provider_service import RoutedAnalysisService
 from core.analysis.job_contract import AnalysisJobSnapshot
@@ -32,6 +36,7 @@ class AnalysisBatchRunner:
             raise ValueError("analysis batch runner requires a pending job")
 
         targets = self._jobs.get_targets(job_id)
+        execution_identity = self._safe_execution_identity(job.preferred_provider)
         self._jobs.mark_running(job_id)
 
         try:
@@ -57,6 +62,20 @@ class AnalysisBatchRunner:
                         error_code=evidence.error_code or "track_unavailable",
                     )
                     continue
+
+                if execution_identity is not None and is_content_addressed_track_id(track_id):
+                    reusable = self._results.reusable_success(
+                        track_id=track_id,
+                        execution_identity=execution_identity,
+                    )
+                    if reusable is not None:
+                        self._jobs.record_success(
+                            job_id,
+                            track_id=track_id,
+                            evidence_id=reusable.evidence_id,
+                            uncertain=self._results.is_uncertain_evidence(reusable),
+                        )
+                        continue
 
                 try:
                     result = self._analysis.analyze_path(
@@ -108,3 +127,18 @@ class AnalysisBatchRunner:
             raise
 
         return self._jobs.finish(job_id)
+
+    def _safe_execution_identity(
+        self,
+        preferred_provider: str | None,
+    ) -> AnalysisExecutionIdentity | None:
+        """Probe optional reuse identity without changing analysis correctness semantics."""
+
+        resolver = getattr(self._analysis, "execution_identity", None)
+        if not callable(resolver):
+            return None
+        try:
+            identity = resolver(preferred_provider=preferred_provider)
+        except Exception:
+            return None
+        return identity if isinstance(identity, AnalysisExecutionIdentity) else None
