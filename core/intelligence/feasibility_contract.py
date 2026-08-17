@@ -10,6 +10,8 @@ class FeasibilityStatus(StrEnum):
     REACHABLE = "reachable"
     INFEASIBLE = "infeasible"
     NOT_PROVEN_WITHIN_BUDGET = "not_proven_within_budget"
+    NOT_PROVEN_MISSING_EVIDENCE = "not_proven_missing_evidence"
+    NOT_PROVEN_UNSUPPORTED_CONSTRAINT = "not_proven_unsupported_constraint"
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,11 +57,9 @@ class FutureFeasibilityResult:
             raise ValueError("reachable feasibility must carry score 1.0")
         if self.status is FeasibilityStatus.INFEASIBLE and self.score != 0.0:
             raise ValueError("infeasible feasibility must carry score 0.0")
-        if (
-            self.status is FeasibilityStatus.NOT_PROVEN_WITHIN_BUDGET
-            and self.score is not None
-        ):
-            raise ValueError("not-proven feasibility must not carry a score")
+        if self.status not in {FeasibilityStatus.REACHABLE, FeasibilityStatus.INFEASIBLE}:
+            if self.score is not None:
+                raise ValueError("not-proven feasibility must not carry a score")
         if self.expanded_states < 0 or self.deepest_expanded_depth < 0:
             raise ValueError("feasibility counters must be non-negative")
         if len(self.context_ref) != 2 or any(not str(item).strip() for item in self.context_ref):
