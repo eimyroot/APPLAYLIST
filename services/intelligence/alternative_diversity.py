@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import asdict, replace
 
 from core.intelligence.set_optimizer_contract import SetOptimizerResult, SetPathAlternative
@@ -59,6 +60,23 @@ def _similarity(
     )
 
 
+def _reason_codes(
+    *,
+    jaccard: float,
+    prefix: float,
+    differing: int,
+    policy: AlternativeDiversityPolicy,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    if jaccard > policy.max_track_jaccard:
+        reasons.append("track_jaccard_above_policy")
+    if prefix > policy.max_shared_prefix_fraction:
+        reasons.append("shared_prefix_above_policy")
+    if differing < policy.minimum_differing_positions:
+        reasons.append("insufficient_differing_positions")
+    return tuple(reasons)
+
+
 def _decision_against_selected(
     *,
     candidate: SetPathAlternative,
@@ -73,33 +91,46 @@ def _decision_against_selected(
             reason_codes=("highest_ranked_path_preserved",),
         )
 
-    comparisons: list[tuple[float, float, int, str]] = []
+    comparisons: list[tuple[int, float, float, int, str, tuple[str, ...]]] = []
     for existing in selected:
         jaccard, prefix, differing = _similarity(candidate, existing)
-        comparisons.append((jaccard, prefix, differing, existing.path_id))
+        reasons = _reason_codes(
+            jaccard=jaccard,
+            prefix=prefix,
+            differing=differing,
+            policy=policy,
+        )
+        comparisons.append(
+            (len(reasons), jaccard, prefix, differing, existing.path_id, reasons)
+        )
 
-    # The most similar already-selected path is the binding comparison. Higher overlap,
-    # longer shared prefix and fewer positional differences are more similar.
-    comparisons.sort(key=lambda item: (-item[0], -item[1], item[2], item[3]))
-    jaccard, prefix, differing, nearest_path_id = comparisons[0]
+    violations = [item for item in comparisons if item[0] > 0]
+    binding_pool = violations if violations else comparisons
+    # Binding path is deterministic: most violated thresholds first, then greatest
+    # overlap/prefix, then fewest differing positions, then stable path identity.
+    binding_pool.sort(key=lambda item: (-item[0], -item[1], -item[2], item[3], item[4]))
+    _, jaccard, prefix, differing, nearest_path_id, binding_reasons = binding_pool[0]
 
-    reasons: list[str] = []
-    if jaccard > policy.max_track_jaccard:
-        reasons.append("track_jaccard_above_policy")
-    if prefix > policy.max_shared_prefix_fraction:
-        reasons.append("shared_prefix_above_policy")
-    if differing < policy.minimum_differing_positions:
-        reasons.append("insufficient_differing_positions")
+    aggregate_reasons: list[str] = []
+    for comparison in violations:
+        for reason in comparison[5]:
+            if reason not in aggregate_reasons:
+                aggregate_reasons.append(reason)
 
+    selected_candidate = not violations
     return AlternativeDiversityDecision(
         path_id=candidate.path_id,
         source_rank=candidate.rank,
-        selected=not reasons,
+        selected=selected_candidate,
         nearest_selected_path_id=nearest_path_id,
         track_jaccard=jaccard,
         shared_prefix_fraction=prefix,
         differing_positions=differing,
-        reason_codes=("diversity_policy_pass",) if not reasons else tuple(reasons),
+        reason_codes=(
+            ("diversity_policy_pass",)
+            if selected_candidate
+            else tuple(aggregate_reasons or binding_reasons)
+        ),
     )
 
 
@@ -173,7 +204,8 @@ def select_diverse_alternatives(
         "policy": asdict(policy),
         "selected_path_ids": [item.path_id for item in reranked],
     }
-    digest = hashlib.sha256(repr(material).encode("utf-8")).hexdigest()[:32]
+    encoded = json.dumps(material, sort_keys=True, separators=(",", ":"), default=str)
+    digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:32]
     return SetAlternativeSelection(
         selection_id=f"sas_{digest}",
         source_result_id=result.result_id,
