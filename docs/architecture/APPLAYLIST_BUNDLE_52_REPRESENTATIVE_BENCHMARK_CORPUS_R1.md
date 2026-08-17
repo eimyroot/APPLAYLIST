@@ -4,11 +4,22 @@
 
 This slice defines the first governed representative optimizer benchmark corpus and explicit engineering acceptance thresholds.
 
-PR #118 is now merged into canonical `feature/bundle-0-bootstrap` at:
+PR #118 is merged into canonical `feature/bundle-0-bootstrap` at:
 
 `b51c5a42717b605ab65ab7e33f05cbb9a18d2920`
 
-PR #119 has been retargeted onto that canonical lineage. The earlier stacked base on PR #118 head `2f0f5a51a9c71788497a8de0320260e7e86a13bd` is historical evidence only.
+PR #119 has been retargeted onto that canonical lineage and reconciled additively without rebase or force rewrite. The canonical-to-feature reconciliation merge commit is:
+
+`3e4f0ac74da0aa290b8f16519837fa5b11c2bd21`
+
+Static ancestry after reconciliation:
+
+- status: `ahead`
+- ahead: 9 commits
+- behind: 0
+- merge base: `b51c5a42717b605ab65ab7e33f05cbb9a18d2920`
+
+The earlier stacked base on PR #118 head `2f0f5a51a9c71788497a8de0320260e7e86a13bd` is historical evidence only.
 
 This layer is evidence-only. It does not activate an optimizer policy, change Set Intelligence ranking, create a Personal DJ Model, or claim that bounded beam search is musically superior.
 
