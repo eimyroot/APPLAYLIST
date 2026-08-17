@@ -6,7 +6,7 @@ Bundle 54 closes the runtime evidence gap between the canonical Human DJ Review 
 
 The local-only materializer consumes two private CASER inputs:
 
-1. `LOCAL_LIBRARY_SNAPSHOT_R1` with exact local paths and content signatures,
+1. `LOCAL_LIBRARY_SNAPSHOT_R1` with exact local paths and inventory signatures,
 2. `CURATED_CASE_SELECTION_R1` with seed/candidate scopes.
 
 It then runs on the machine where the actual audio files are mounted.
@@ -15,10 +15,12 @@ It then runs on the machine where the actual audio files are mounted.
 
 ```text
 private snapshot + curated case specs
+→ read actual local audio bytes
+→ compute verified content SHA-256
 → decode actual audio with BaselineLibrosaMIR
 → normalize provider result
 → require positive duration evidence
-→ build path-free MusicDNARevision
+→ build path-free MusicDNARevision using verified content SHA-256
 → derive explicit phase-scoped TransitionContext
 → generate/persist context-specific TransitionAssessment adjacency
 → run strict greedy and bounded beam from identical evidence
@@ -28,15 +30,29 @@ private snapshot + curated case specs
 → emit private runtime manifest + strategy-hidden reviewer packet
 ```
 
+## Identity and provenance boundary
+
+The source workbook calls its 64-hex field `File Signature`, but R1 does not assume undocumented hash semantics. The value is retained as opaque `inventory_file_signature` provenance only.
+
+Runtime content identity is independently computed from the actual local file bytes:
+
+```text
+content_identity = sha256:<verified byte-wise SHA-256>
+input_identity   = sha256:<verified byte-wise SHA-256>
+```
+
+The private runtime manifest records both `inventory_file_signature` and `content_sha256`. Equality between them is neither assumed nor required unless the upstream inventory-signature contract is separately documented.
+
 ## Truth boundaries
 
 - Snapshot BPM/key/energy remain curation metadata only; they are not substituted when audio decoding/MIR fails.
 - Positive duration is measured from decoded local audio.
+- Missing/unreadable local audio fails closed before Music DNA is created.
 - TransitionAssessment remains the sole pairwise transition authority.
 - No metadata-only heuristic is allowed to masquerade as TransitionAssessment.
 - Greedy and beam receive the same persisted evidence, intent, root state, ranking policy and base TransitionContext.
 - Whole-track Music DNA fallback is permitted when no rhythmic-structure revision exists; missing phrase/bass/vocal/spectral evidence remains explicit rather than fabricated.
-- A case is not admitted to blind review when either planner has no path, reports missing evidence/budget exhaustion, or both planners produce the same path.
+- A case is not admitted to blind review when either planner has no path, reports missing evidence/budget exhaustion, fails engineering acceptance, or both planners produce the same path.
 - Human review cannot activate optimizer/ranking policy or Personal DJ Model training.
 
 ## Privacy
