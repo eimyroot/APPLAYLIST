@@ -100,14 +100,20 @@ def _observe(scenario: RepresentativeBenchmarkScenario) -> ScenarioAcceptanceObs
     ):
         reasons.append("deterministic_replay_failed")
 
-    missing_evidence = comparison.beam.missing_evidence_detected
+    # Evidence gaps are corpus evidence regardless of which benchmark strategy first
+    # encounters them. Expected beam status still proves beam-specific semantics where
+    # the manifest requires it, but global safety counters must not ignore greedy gaps.
+    missing_evidence = (
+        comparison.greedy.missing_evidence_detected
+        or comparison.beam.missing_evidence_detected
+    )
     if expectation.require_missing_evidence and not missing_evidence:
         reasons.append("expected_missing_evidence_not_observed")
     if missing_evidence and not expectation.allow_missing_evidence:
         reasons.append("unexpected_missing_evidence")
 
-    budget_exhausted = comparison.beam.budget_exhausted
-    if expectation.require_budget_exhaustion and not budget_exhausted:
+    budget_exhausted = comparison.greedy.budget_exhausted or comparison.beam.budget_exhausted
+    if expectation.require_budget_exhaustion and not comparison.beam.budget_exhausted:
         reasons.append("expected_budget_exhaustion_not_observed")
     if budget_exhausted and not expectation.allow_budget_exhaustion:
         reasons.append("unexpected_budget_exhaustion")
@@ -182,13 +188,16 @@ def evaluate_representative_benchmark_corpus_r1(
     )
     replay_rate = replay_successes / len(observations) if observations else 0.0
     failure_count = sum(1 for item in observations if not item.passed)
-    expected_beam_wins = sum(
-        1 for item in observations if item.beam_reaches_target_when_greedy_does_not
-    )
 
     expectation_by_id = {
         item.expectation.scenario_id: item.expectation for item in scenario_tuple
     }
+    expected_beam_wins = sum(
+        1
+        for item in observations
+        if expectation_by_id[item.scenario_id].require_beam_reaches_when_greedy_misses
+        and item.beam_reaches_target_when_greedy_does_not
+    )
     unexpected_missing_evidence = sum(
         1
         for item in observations
@@ -221,10 +230,12 @@ def evaluate_representative_benchmark_corpus_r1(
     if expected_beam_wins < thresholds.minimum_expected_beam_wins:
         threshold_failures.append("expected_beam_win_count_below_threshold")
 
-    if incomplete:
-        verdict = CorpusAcceptanceVerdict.INCOMPLETE
-    elif threshold_failures:
+    # Known correctness failures are stronger evidence than missing coverage. An
+    # incomplete corpus may not PASS, but it also must not hide an observed FAIL.
+    if threshold_failures:
         verdict = CorpusAcceptanceVerdict.FAIL
+    elif incomplete:
+        verdict = CorpusAcceptanceVerdict.INCOMPLETE
     else:
         verdict = CorpusAcceptanceVerdict.PASS
 
