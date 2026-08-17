@@ -4,7 +4,11 @@
 
 This slice defines the first governed representative optimizer benchmark corpus and explicit engineering acceptance thresholds.
 
-It is stacked on PR #118 exact head `2f0f5a51a9c71788497a8de0320260e7e86a13bd` because PR #118 has not been authorized for merge.
+PR #118 is now merged into canonical `feature/bundle-0-bootstrap` at:
+
+`b51c5a42717b605ab65ab7e33f05cbb9a18d2920`
+
+PR #119 has been retargeted onto that canonical lineage. The earlier stacked base on PR #118 head `2f0f5a51a9c71788497a8de0320260e7e86a13bd` is historical evidence only.
 
 This layer is evidence-only. It does not activate an optimizer policy, change Set Intelligence ranking, create a Personal DJ Model, or claim that bounded beam search is musically superior.
 
@@ -31,9 +35,7 @@ The canonical R1 manifest requires ten categories:
 9. `high_branching`
 10. `alternative_near_duplicate_pressure`
 
-The manifest is versioned as:
-
-`representative-benchmark-corpus-r1`
+The manifest is versioned as `representative-benchmark-corpus-r1`.
 
 ## Acceptance states
 
@@ -43,9 +45,9 @@ The corpus evaluation returns one of:
 - `FAIL`
 - `INCOMPLETE`
 
-`INCOMPLETE` is deliberately distinct from `FAIL`.
+A known correctness or threshold failure produces `FAIL` even when coverage is also incomplete. Only when no known failure exists can missing categories or too few scenarios resolve to `INCOMPLETE`.
 
-An incomplete corpus means the evidence surface is insufficient to make the engineering acceptance claim. Missing categories or too few scenarios can never be interpreted as PASS.
+This prevents incomplete coverage from masking an observed regression.
 
 ## Default R1 thresholds
 
@@ -57,7 +59,8 @@ The default `optimizer-acceptance-r1` policy requires:
 - maximum scenario expectation failures: 0
 - maximum unexpected missing-evidence events: 0
 - maximum unexpected budget-exhaustion events: 0
-- minimum expected beam-win cases: 1
+- minimum explicitly expected beam-win cases: 1
+- `activation_authorized = false`
 
 These are engineering correctness and safety thresholds, not musical-quality thresholds.
 
@@ -79,23 +82,19 @@ A scenario may define:
 - minimum diversity rejection count,
 - minimum diverse alternative count.
 
-This allows expected uncertainty to remain truthful. For example, the missing-evidence case must observe missing evidence and should resolve to `NOT_PROVEN_MISSING_EVIDENCE`; that expected unknown state is not an acceptance failure.
+Expected uncertainty remains truthful. Missing evidence stays explicit as a not-proven state instead of being converted to a neutral score. Expected `BUDGET_EXHAUSTED` remains explicit rather than masquerading as exhaustive failure.
 
-Likewise, the budget-truncation case explicitly requires `BUDGET_EXHAUSTED`. The test is not asking the optimizer to hide truncation; it is verifying that the bounded-search contract reports it correctly while preserving valid partial alternatives.
+Unexpected missing-evidence or budget-exhaustion events are accounted for across either benchmark strategy, while manifest-required beam-specific expectations remain checked against beam specifically.
 
 ## No universal winner score
 
 R1 does not collapse target completion, required tracks, local transition scores, expansion cost, uncertainty, diversity, and runtime boundaries into one scalar.
 
-The existing benchmark remains responsible for separate greedy-vs-beam evidence.
-
-The acceptance layer asks whether explicit engineering invariants and scenario expectations were satisfied.
+The existing benchmark remains responsible for separate greedy-vs-beam evidence. The acceptance layer only asks whether explicit engineering invariants and scenario expectations were satisfied.
 
 ## Determinism
 
-Both greedy and beam benchmark strategies already execute deterministic replay checks in PR #118.
-
-R1 raises that property to corpus-level acceptance:
+Both greedy and beam execute deterministic replay checks. R1 raises that property to corpus-level acceptance with:
 
 `minimum_deterministic_replay_rate = 1.0`
 
@@ -103,33 +102,9 @@ A single replay mismatch fails the default acceptance policy.
 
 ## Diversity
 
-Alternative diversity remains a post-search evidence selector.
-
-R1 can require a near-duplicate-pressure scenario to prove that diversity filtering actually rejects at least one materially similar alternative.
+Alternative diversity remains a post-search evidence selector. R1 can require a near-duplicate-pressure scenario to prove that diversity filtering rejects materially similar alternatives.
 
 This does not alter raw optimizer rank, path objective, TransitionAssessment evidence, or Set Intelligence ranking.
-
-## Missing evidence
-
-Missing evidence is never converted into an invented neutral value.
-
-Scenario expectations distinguish:
-
-- expected missing evidence,
-- allowed missing evidence,
-- unexpected missing evidence.
-
-Unexpected missing evidence counts toward corpus failure under the default policy.
-
-Expected missing evidence remains explicit evidence of correct fail-open/fail-unknown semantics rather than being mislabeled as optimizer failure.
-
-## Budget truncation
-
-Expected bounded-search truncation is a first-class scenario category.
-
-Unexpected truncation is a corpus acceptance failure under the default policy.
-
-The dedicated budget scenario, however, must demonstrate the opposite: the optimizer must truthfully expose `BUDGET_EXHAUSTED` rather than pretending that the explored frontier was exhaustive.
 
 ## Activation boundary
 
@@ -139,23 +114,11 @@ Therefore:
 
 `CORPUS_PASS != PRODUCTION_ACTIVATION`
 
-A PASS means only that the named R1 engineering corpus and thresholds were satisfied.
-
-It does not authorize:
-
-- optimizer policy switching,
-- ranking-policy changes,
-- future-feasibility weight activation,
-- Personal DJ Model influence,
-- automatic export,
-- release,
-- deployment.
+A PASS does not authorize optimizer policy switching, ranking-policy changes, future-feasibility weight activation, Personal DJ Model influence, automatic export, release, or deployment.
 
 ## Musical-quality boundary
 
-R1 uses deterministic synthetic/evidence-backed scenario semantics to validate engineering correctness.
-
-It does not establish:
+R1 validates deterministic engineering correctness. It does not establish:
 
 - human DJ preference,
 - crowd-response quality,
@@ -164,17 +127,15 @@ It does not establish:
 - live-set suitability,
 - personal taste fit.
 
-Those require later curated real-library benchmark evidence and human evaluation.
+Those require curated real-library evidence and human evaluation.
 
 ## Infrastructure boundary
 
-No graph database, vector database, embeddings, or LLM path-selection authority is introduced.
-
-The existing persisted SQLite adjacency and Set Intelligence contracts remain sufficient for this acceptance slice.
+No graph database, vector database, embeddings, or LLM path-selection authority is introduced. The existing persisted adjacency and Set Intelligence contracts remain sufficient for this acceptance slice.
 
 ## Next boundary after canonicalization
 
-After PR #118 and this stacked corpus slice are explicitly canonicalized, the next evidence step should be:
+After PR #119 is separately authorized and canonicalized, the next evidence step is:
 
 `CURATED_REAL_LIBRARY_BENCHMARK_R1 + HUMAN_DJ_REVIEW_PROTOCOL`
 
