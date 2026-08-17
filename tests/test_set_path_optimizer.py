@@ -339,3 +339,33 @@ def test_optimizer_marks_target_reached_when_horizon_completes_set(isolated_data
     assert result.status is SetOptimizerStatus.TARGET_REACHED
     assert result.alternatives[0].objective.target_reached is True
     assert result.alternatives[0].added_steps[0].track_id == "track-b"
+
+
+def test_optimizer_budget_exhaustion_preserves_explored_partial_path(isolated_database: Path) -> None:
+    repo = MusicIntelligenceRepository()
+    intent = _intent()
+    context = transition_context_for_phase(
+        phase=intent.phase("phase-1"),
+        base_context=preserve_groove_context_v1(),
+    )
+    _persist(repo, context, ("track-a", "track-b"), ("track-a", "track-c"))
+
+    result = _run(
+        repo=repo,
+        intent=intent,
+        state=_state(),
+        policy=SetOptimizerPolicy(
+            beam_width=2,
+            max_depth=2,
+            max_expanded_candidates=1,
+            alternative_limit=2,
+        ),
+        durations={"track-b": 300.0, "track-c": 300.0},
+    )
+
+    assert result.status is SetOptimizerStatus.BUDGET_EXHAUSTED
+    assert result.budget_exhausted is True
+    assert result.expanded_candidates == 1
+    assert result.deepest_depth == 1
+    assert len(result.alternatives) == 1
+    assert result.alternatives[0].added_steps[0].track_id == "track-b"
