@@ -142,11 +142,6 @@ def _dimension_evidence(
             if assignment.slot_a_plan_id == case.greedy_plan.plan_id
             else ReviewPlanStrategy.BOUNDED_BEAM
         )
-        b_strategy = (
-            ReviewPlanStrategy.GREEDY_RECOMMEND_NEXT
-            if assignment.slot_b_plan_id == case.greedy_plan.plan_id
-            else ReviewPlanStrategy.BOUNDED_BEAM
-        )
         for rating in review.ratings:
             if a_strategy is ReviewPlanStrategy.GREEDY_RECOMMEND_NEXT:
                 greedy_scores[rating.dimension].append(rating.plan_a_score)
@@ -201,6 +196,7 @@ def evaluate_curated_real_library_human_review_r1(
     _validate_unique(tuple(item.review_id for item in review_tuple), "review ids")
 
     expected_snapshot_ref = (snapshot.snapshot_id, snapshot.snapshot_version)
+    snapshot_track_ids = set(snapshot.track_ids)
     case_by_id = {item.case_id: item for item in case_tuple}
     for case in case_tuple:
         if case.snapshot_ref != expected_snapshot_ref:
@@ -208,7 +204,7 @@ def evaluate_curated_real_library_human_review_r1(
         case_tracks = set(case.greedy_plan.ordered_track_ids) | set(
             case.beam_plan.ordered_track_ids
         )
-        if not case_tracks.issubset(set(snapshot.track_ids)):
+        if not case_tracks.issubset(snapshot_track_ids):
             raise ValueError("curated case references tracks outside the snapshot")
 
     assignment_by_id = {item.assignment_id: item for item in assignment_tuple}
@@ -226,10 +222,15 @@ def evaluate_curated_real_library_human_review_r1(
         assignment_by_case[assignment.case_id] = assignment
 
     reviews_by_case: dict[str, list[HumanDJReview]] = defaultdict(list)
+    reviewer_case_pairs: set[tuple[str, str]] = set()
     for review in review_tuple:
         if review.assignment_id not in assignment_by_id:
             raise ValueError("human review references an unknown blind assignment")
         assignment = assignment_by_id[review.assignment_id]
+        reviewer_case_pair = (assignment.case_id, review.reviewer_ref)
+        if reviewer_case_pair in reviewer_case_pairs:
+            raise ValueError("a reviewer may submit only one review per curated case")
+        reviewer_case_pairs.add(reviewer_case_pair)
         reviews_by_case[assignment.case_id].append(review)
 
     covered_roles = tuple(
@@ -309,9 +310,12 @@ def evaluate_curated_real_library_human_review_r1(
     )
 
     failures: list[str] = []
-    if blind_integrity_rate < thresholds.minimum_blind_integrity_rate:
+    # Absence of review evidence is an INCOMPLETE state, not observed bad evidence.
+    # Once reviews exist, integrity/dimension defects are known failures and outrank
+    # incomplete coverage, matching the representative-corpus fail-closed precedent.
+    if review_tuple and blind_integrity_rate < thresholds.minimum_blind_integrity_rate:
         failures.append("blind_integrity_rate_below_threshold")
-    if dimension_coverage_rate < thresholds.minimum_dimension_coverage_rate:
+    if review_tuple and dimension_coverage_rate < thresholds.minimum_dimension_coverage_rate:
         failures.append("dimension_coverage_rate_below_threshold")
     if engineering_regression_count > thresholds.maximum_engineering_regressions:
         failures.append("engineering_regression_count_above_threshold")
