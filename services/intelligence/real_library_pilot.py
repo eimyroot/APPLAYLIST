@@ -66,6 +66,7 @@ class RealLibraryTrackInput:
 @dataclass(frozen=True, slots=True)
 class MaterializedTrackEvidence:
     source: RealLibraryTrackInput
+    content_sha256: str
     canonical: CanonicalAnalysisResult
     music_dna: MusicDNARevision
 
@@ -96,10 +97,28 @@ def _non_empty(value: Any, field_name: str) -> str:
 
 
 def _sha256_json(value: object) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode(
-        "utf-8"
-    )
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _sha256_file(path: str | Path, *, chunk_size: int = 1024 * 1024) -> str:
+    """Return SHA-256 calculated from the actual local file bytes."""
+    source = Path(path)
+    if not source.is_file():
+        raise RealLibraryPilotError(f"audio file not found: {source}")
+    digest = hashlib.sha256()
+    try:
+        with source.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(chunk_size), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        raise RealLibraryPilotError(f"cannot read audio file for hashing: {source}") from exc
+    return digest.hexdigest()
 
 
 def _load_json(path: str | Path) -> dict[str, Any]:
@@ -189,10 +208,15 @@ def required_track_ids(selection_raw: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(sorted(values))
 
 
-def _analysis_revision(track: RealLibraryTrackInput, canonical: CanonicalAnalysisResult) -> str:
+def _analysis_revision(
+    track: RealLibraryTrackInput,
+    canonical: CanonicalAnalysisResult,
+    content_sha256: str,
+) -> str:
     material = {
         "materializer": REAL_LIBRARY_MATERIALIZER_VERSION,
-        "file_signature": track.file_signature,
+        "inventory_file_signature": track.file_signature,
+        "content_sha256": content_sha256,
         "provider": canonical.provider,
         "provider_version": canonical.provider_version,
         "algorithm_version": canonical.algorithm_version,
@@ -212,8 +236,9 @@ def analyze_real_tracks(
 ) -> dict[str, MaterializedTrackEvidence]:
     """Decode actual selected audio and build path-free Music DNA evidence.
 
-    Snapshot BPM/key/energy are curation metadata only. If decoding or MIR fails, the
-    function fails closed instead of substituting the inventory metadata as runtime fact.
+    Snapshot BPM/key/energy and the audit's opaque File Signature remain provenance
+    metadata only. Runtime content identity is SHA-256 computed from the actual bytes.
+    Provider failure never falls back to spreadsheet metadata.
     """
     _validate_snapshot(snapshot_raw)
     tracks = _track_inputs(snapshot_raw)
@@ -226,6 +251,7 @@ def analyze_real_tracks(
     evidence: dict[str, MaterializedTrackEvidence] = {}
     for track_id in selected_ids:
         track = tracks[track_id]
+        content_sha256 = _sha256_file(track.absolute_path)
         raw = provider.analyze(track.absolute_path)
         canonical = normalize_provider_result(
             raw,
@@ -234,19 +260,25 @@ def analyze_real_tracks(
         )
         if canonical.duration_seconds is None or canonical.duration_seconds <= 0.0:
             raise RealLibraryPilotError(f"positive duration evidence missing for {track_id}")
-        revision = _analysis_revision(track, canonical)
+        revision = _analysis_revision(track, canonical, content_sha256)
         evidence_id = f"evidence:{track_id}:{revision.split(':', 1)[1]}"
+        content_identity = f"sha256:{content_sha256}"
         dna = build_music_dna(
             track_id=track_id,
-            content_identity=f"sha256:{track.file_signature}",
+            content_identity=content_identity,
             analysis_revision=revision,
             evidence_id=evidence_id,
-            input_identity=f"sha256:{track.file_signature}",
+            input_identity=content_identity,
             canonical=canonical,
             rhythmic_structure=None,
             benchmark_status="real-library-pilot-r1-candidate",
         )
-        evidence[track_id] = MaterializedTrackEvidence(track, canonical, dna)
+        evidence[track_id] = MaterializedTrackEvidence(
+            source=track,
+            content_sha256=content_sha256,
+            canonical=canonical,
+            music_dna=dna,
+        )
     return evidence
 
 
@@ -301,9 +333,15 @@ def _intent_for_case(
 
 
 def _state_for_case(
-    *, case_id: str, seed: MaterializedTrackEvidence, phase: SetPhase
+    *,
+    case_id: str,
+    seed: MaterializedTrackEvidence,
+    phase: SetPhase,
 ) -> SequenceState:
     evidence_ref = seed.music_dna.identity.evidence_refs[0]
+    duration = seed.canonical.duration_seconds
+    if duration is None or duration <= 0.0:
+        raise RealLibraryPilotError("seed duration evidence must be positive")
     return SequenceState(
         state_id=f"state:{case_id}",
         state_version=REAL_LIBRARY_MATERIALIZER_VERSION,
@@ -319,13 +357,17 @@ def _state_for_case(
         current_track_id=seed.source.track_id,
         current_segment_id=f"{seed.source.track_id}:whole",
         used_track_ids=(seed.source.track_id,),
-        cumulative_duration_seconds=float(seed.canonical.duration_seconds),
+        cumulative_duration_seconds=float(duration),
         current_energy_state=seed.canonical.energy,
         evidence_refs=(evidence_ref,),
     )
 
 
-def _playlist_context(case_id: str, state: SequenceState, phase: SetPhase) -> PlaylistContext:
+def _playlist_context(
+    case_id: str,
+    state: SequenceState,
+    phase: SetPhase,
+) -> PlaylistContext:
     return PlaylistContext(
         context_id=f"playlist-context:{case_id}",
         context_version=REAL_LIBRARY_MATERIALIZER_VERSION,
@@ -470,13 +512,21 @@ def materialize_cases(
             track_ids=scope,
             generated_at=generated_at,
         )
-        root_state = _state_for_case(case_id=case_id, seed=evidence[seed_id], phase=phase)
+        root_state = _state_for_case(
+            case_id=case_id,
+            seed=evidence[seed_id],
+            phase=phase,
+        )
         root_context = _playlist_context(case_id, root_state, phase)
-        durations = {
-            track_id: float(evidence[track_id].canonical.duration_seconds)
-            for track_id in scope
-            if evidence[track_id].canonical.duration_seconds is not None
-        }
+        durations: dict[str, float] = {}
+        for track_id in scope:
+            duration = evidence[track_id].canonical.duration_seconds
+            if duration is None or duration <= 0.0:
+                raise RealLibraryPilotError(
+                    f"case {case_id} missing positive duration for {track_id}"
+                )
+            durations[track_id] = float(duration)
+
         greedy_result, beam_result = _run_optimizer_pair(
             repository=repository,
             intent=intent,
@@ -486,9 +536,13 @@ def materialize_cases(
             generated_at=generated_at,
         )
         greedy_plan = _best_plan(
-            greedy_result, ReviewPlanStrategy.GREEDY_RECOMMEND_NEXT
+            greedy_result,
+            ReviewPlanStrategy.GREEDY_RECOMMEND_NEXT,
         )
-        beam_plan = _best_plan(beam_result, ReviewPlanStrategy.BOUNDED_BEAM)
+        beam_plan = _best_plan(
+            beam_result,
+            ReviewPlanStrategy.BOUNDED_BEAM,
+        )
         if (
             greedy_plan.ordered_track_ids == beam_plan.ordered_track_ids
             and greedy_plan.transition_ids == beam_plan.transition_ids
@@ -503,6 +557,10 @@ def materialize_cases(
             and not greedy_result.budget_exhausted
             and not beam_result.budget_exhausted
         )
+        if not engineering_passed:
+            raise RealLibraryPilotError(
+                f"case {case_id} failed engineering acceptance before human review"
+            )
         scenario_fingerprint = _sha256_json(
             {
                 "case_spec": spec,
@@ -522,14 +580,19 @@ def materialize_cases(
             ),
             greedy_plan=greedy_plan,
             beam_plan=beam_plan,
-            engineering_acceptance_passed=engineering_passed,
+            engineering_acceptance_passed=True,
             evidence_refs=(
                 f"greedy:{greedy_result.result_id}",
                 f"beam:{beam_result.result_id}",
             ),
         )
-        assignment = build_blinded_plan_assignment(case=case, blinding_seed=blinding_seed)
-        materialized.append(MaterializedCase(case, assignment, greedy_result, beam_result))
+        assignment = build_blinded_plan_assignment(
+            case=case,
+            blinding_seed=blinding_seed,
+        )
+        materialized.append(
+            MaterializedCase(case, assignment, greedy_result, beam_result)
+        )
     return tuple(materialized)
 
 
@@ -548,7 +611,8 @@ def private_runtime_manifest(
             {
                 "track_id": track_id,
                 "absolute_path": item.source.absolute_path,
-                "file_signature": item.source.file_signature,
+                "inventory_file_signature": item.source.file_signature,
+                "content_sha256": item.content_sha256,
                 "duration_seconds": item.canonical.duration_seconds,
                 "provider": item.canonical.provider,
                 "provider_version": item.canonical.provider_version,
@@ -596,7 +660,10 @@ def reviewer_packet(
     generated_at: str,
 ) -> dict[str, Any]:
     snapshot = _validate_snapshot(snapshot_raw)
-    names = {track_id: item.source.display_name for track_id, item in evidence.items()}
+    names = {
+        track_id: item.source.display_name
+        for track_id, item in evidence.items()
+    }
     rows: list[dict[str, Any]] = []
     for item in cases:
         case = item.case
@@ -666,8 +733,6 @@ def materialize_real_library_pilot_r1(
     )
     if len(cases) != len(_case_specs(selection_raw)):
         raise RealLibraryPilotError("not every curated case produced a blind plan pair")
-    if not all(item.case.engineering_acceptance_passed for item in cases):
-        raise RealLibraryPilotError("engineering acceptance failed for one or more curated cases")
 
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -696,8 +761,12 @@ def materialize_real_library_pilot_r1(
     return {
         "private_runtime_manifest": str(private_path),
         "blind_reviewer_packet": str(reviewer_path),
-        "private_runtime_manifest_sha256": hashlib.sha256(private_path.read_bytes()).hexdigest(),
-        "blind_reviewer_packet_sha256": hashlib.sha256(reviewer_path.read_bytes()).hexdigest(),
+        "private_runtime_manifest_sha256": hashlib.sha256(
+            private_path.read_bytes()
+        ).hexdigest(),
+        "blind_reviewer_packet_sha256": hashlib.sha256(
+            reviewer_path.read_bytes()
+        ).hexdigest(),
     }
 
 
@@ -709,6 +778,7 @@ __all__ = [
     "MaterializedTrackEvidence",
     "RealLibraryPilotError",
     "RealLibraryTrackInput",
+    "_sha256_file",
     "analyze_real_tracks",
     "materialize_cases",
     "materialize_real_library_pilot_r1",
