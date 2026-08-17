@@ -185,7 +185,7 @@ def reconcile_real_tracks(
         provider_ran = counted.provider_calls > before_calls
 
         record = evidence_repository.latest_success_for_track(canonical_track_id)
-        failed = terminal.status != "done" or record is None
+        failed = terminal.status != "done" or terminal.counts.failed != 0 or record is None
         if failed:
             stats = ReconciliationStats(
                 targets_total=stats.targets_total,
