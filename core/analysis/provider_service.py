@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from importlib import metadata
 from typing import Any, Protocol
 
+from core.analysis.execution_identity import AnalysisExecutionIdentity
 from core.analysis.provider_contract import (
     CanonicalAnalysisResult,
     ProviderContractError,
@@ -29,6 +31,34 @@ class RoutedAnalysisService:
 
     def __init__(self, selector: ProviderSelector = select_best_provider) -> None:
         self._selector = selector
+
+    def execution_identity(
+        self,
+        *,
+        preferred_provider: str | None = None,
+    ) -> AnalysisExecutionIdentity | None:
+        """Return a pre-execution identity only when exact evidence reuse is safe.
+
+        R1 intentionally enables reuse only for the versioned baseline librosa
+        provider. Other providers remain fail-closed to fresh execution until they
+        expose an equally stable pre-run identity contract.
+        """
+
+        provider = self._select_provider(preferred_provider)
+        if provider.name != "librosa":
+            return None
+        try:
+            from services.analysis.librosa_baseline import BaselineLibrosaMIR
+
+            provider_version = metadata.version("librosa")
+        except (ImportError, metadata.PackageNotFoundError):
+            return None
+        return AnalysisExecutionIdentity(
+            provider=provider.name,
+            analysis_version="canonical-mir-v1",
+            provider_version=provider_version,
+            algorithm_version=BaselineLibrosaMIR.algorithm_version,
+        )
 
     def analyze_path(
         self,
