@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,7 @@ from services.intelligence.real_library_pilot import (
     MaterializedTrackEvidence,
     RealLibraryPilotError,
     RealLibraryTrackInput,
+    _sha256_file,
     _validate_snapshot,
     required_track_ids,
     reviewer_packet,
@@ -20,7 +22,7 @@ from services.intelligence.real_library_pilot import (
 def _snapshot() -> dict:
     tracks = []
     for index in range(4):
-        signature = hashlib.sha256(f"track-{index}".encode("utf-8")).hexdigest()
+        signature = hashlib.sha256(f"inventory-track-{index}".encode("utf-8")).hexdigest()
         track_id = f"trk_{signature[:24]}"
         tracks.append(
             {
@@ -68,6 +70,19 @@ def test_required_track_ids_are_stable_and_unique() -> None:
     assert required_track_ids(selection) == expected
 
 
+def test_sha256_file_hashes_actual_bytes_not_inventory_signature(tmp_path: Path) -> None:
+    audio = tmp_path / "fixture.mp3"
+    payload = b"actual-local-audio-bytes\x00\x01\x02"
+    audio.write_bytes(payload)
+
+    assert _sha256_file(audio) == hashlib.sha256(payload).hexdigest()
+
+
+def test_sha256_file_fails_closed_for_missing_audio(tmp_path: Path) -> None:
+    with pytest.raises(RealLibraryPilotError, match="audio file not found"):
+        _sha256_file(tmp_path / "missing.mp3")
+
+
 def test_snapshot_rejects_public_publishable_private_paths() -> None:
     snapshot = _snapshot()
     snapshot["privacy"]["publishable_to_public_repo"] = True
@@ -98,6 +113,7 @@ def test_reviewer_packet_contains_no_algorithm_strategy_or_absolute_path() -> No
             genre=raw["genre"],
             snapshot_energy=raw["energy"] / 10.0,
         )
+        content_sha256 = hashlib.sha256(track.track_id.encode("utf-8")).hexdigest()
         canonical = CanonicalAnalysisResult(
             path=track.absolute_path,
             provider="librosa",
@@ -118,13 +134,18 @@ def test_reviewer_packet_contains_no_algorithm_strategy_or_absolute_path() -> No
         )
         dna = build_music_dna(
             track_id=track.track_id,
-            content_identity=f"sha256:{track.file_signature}",
+            content_identity=f"sha256:{content_sha256}",
             analysis_revision=f"analysis:{track.track_id}",
             evidence_id=f"evidence:{track.track_id}",
-            input_identity=f"sha256:{track.file_signature}",
+            input_identity=f"sha256:{content_sha256}",
             canonical=canonical,
         )
-        evidence[track.track_id] = MaterializedTrackEvidence(track, canonical, dna)
+        evidence[track.track_id] = MaterializedTrackEvidence(
+            source=track,
+            content_sha256=content_sha256,
+            canonical=canonical,
+            music_dna=dna,
+        )
 
     greedy = ReviewableSetPlan(
         plan_id="greedy-plan",
