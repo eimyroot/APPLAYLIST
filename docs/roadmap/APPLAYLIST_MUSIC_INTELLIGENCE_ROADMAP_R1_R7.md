@@ -120,11 +120,76 @@ This is the first phase that should be tested with external DJs for willingness-
 
 ---
 
-# R3 — Set Intelligence
+# R2.5 — Set Intelligence Contract + Runtime
 
 ## Goal
 
-Turn Transition Intelligence into an intentional set path rather than a sequence of locally good pairs.
+Define sequence semantics before introducing path-search complexity.
+
+A set must not be reduced to a chain of locally strong pairwise transitions.
+
+## Product outcome
+
+For a current set state, APPLAYLIST can deterministically produce a bounded Top-N list of eligible next candidates using explicit DJ intent, dramaturgical phase, trajectory, sequence history and persisted TransitionAssessment evidence.
+
+## Canonical contract
+
+`APPLAYLIST_SET_INTELLIGENCE_CONTRACT_V1.md`
+
+## Required capabilities
+
+- `PlaylistIntent`,
+- `PlaylistContext`,
+- `SetPhase`,
+- `SequenceState`,
+- required/forbidden/locked-track semantics,
+- hard constraints before ranking,
+- sequence-level energy/tempo/style/diversity features,
+- explicit ranking policy and weights,
+- deterministic tie-breaking,
+- Top-N `recommend_next`,
+- future-feasibility signal with explicit bounded horizon,
+- structured sequence-level explanations,
+- no hidden fallback to legacy composition.
+
+## Infrastructure rule
+
+The graph is a domain model, not a database mandate.
+
+R2.5 and the first R3 optimizer must not require Neo4j, another graph database or a vector database for correctness.
+
+Transition adjacency may be persisted through existing repository/storage boundaries and indexed by canonical segment/transition IDs.
+
+## Acceptance gates
+
+- intent and context are separate/versioned,
+- sequence state is immutable/reconstructable,
+- hard constraints cannot be outweighed,
+- missing evidence remains explicit,
+- identical inputs produce identical Top-N ordering,
+- locks/bans/required tracks have deterministic fixtures,
+- phase/trajectory behavior has deterministic fixtures,
+- ranking never calls MIR providers directly,
+- renderer receives no filesystem or sidecar authority,
+- a graph DB/vector DB is not required to pass correctness tests.
+
+## Commercial value
+
+This is the semantic bridge that turns Transition Intelligence into a coherent set-building product instead of a pairwise recommendation demo.
+
+---
+
+# R3 — Set Intelligence Graph/Path Optimization
+
+## Goal
+
+Turn Set Intelligence candidate expansion into an intentional set path rather than a sequence of locally good pairs.
+
+## Dependency
+
+R3 starts only after the R2.5 Set Intelligence contract/runtime is proven.
+
+The optimizer consumes Set Intelligence state expansions; it does not define intent, phase, hard-constraint or ranking semantics itself.
 
 ## Product outcome
 
@@ -136,11 +201,27 @@ The DJ specifies constraints and desired trajectory; APPLAYLIST proposes an expl
 Music DNA nodes
 + segment nodes
 + TransitionAssessment edges
-+ constraints
-+ trajectory
-+ preference weights
--> graph/path optimization
++ PlaylistIntent
++ PlaylistContext
++ SetPhase
++ SequenceState
++ deterministic recommend_next
+-> bounded graph/path optimization
 ```
+
+## First optimizer
+
+Prefer deterministic bounded beam/lookahead search with explicit:
+
+- beam width,
+- branching limit,
+- lookahead depth,
+- maximum expanded states,
+- deterministic tie-break policy,
+- terminal/search reason,
+- policy version.
+
+Do not add a graph database or vector database unless measured requirements later justify one.
 
 ## Required capabilities
 
@@ -153,7 +234,7 @@ Music DNA nodes
 - harmonic-risk policy,
 - style constraints,
 - novelty/repetition policy,
-- graph search/path optimization,
+- bounded graph search/path optimization,
 - alternative paths,
 - deterministic result under identical inputs,
 - explanation of major route decisions.
@@ -164,7 +245,9 @@ Music DNA nodes
 - no hidden mutation of analysis evidence,
 - result can be regenerated from recorded inputs,
 - alternatives are distinguishable by reason,
-- optimizer is bounded for realistic local libraries.
+- optimizer is bounded for realistic local libraries,
+- search-budget exhaustion is not misreported as mathematical infeasibility,
+- bounded search beats or meaningfully complements greedy and legacy baselines on named product outcomes.
 
 ## Commercial value
 
@@ -400,7 +483,8 @@ Assuming one focused implementation stream and no major architecture reversal:
 |---|---:|---|
 | R1 | 4–6 focused engineering weeks | Music DNA truth layer is reliable and inspectable |
 | R2 | 4–7 weeks | transition recommendations are explainable and testable with DJs |
-| R3 | 4–6 weeks | graph set builder satisfies constraints and trajectories |
+| R2.5 | focused contract/runtime slice | sequence semantics and deterministic Top-N candidate expansion are proven |
+| R3 | 4–6 weeks | bounded graph set builder satisfies constraints and trajectories |
 | R4 | 3–5 weeks | end-to-end editable/exportable paid-release candidate |
 | R5 | 4–8 weeks | preference learning measurably improves user ranking |
 | R6 | incremental | advanced capabilities prove named product value |
@@ -442,11 +526,9 @@ Reconsider scope if:
 
 # Current next step
 
-Finish Bundle 50 desktop transport governance, then implement Bundle 51 against:
+1. Keep Bundle 51 Music DNA + Transition Intelligence runtime PR #112 as the dependency boundary until separately authorized for merge.
+2. Define and verify `APPLAYLIST_SET_INTELLIGENCE_CONTRACT_V1.md` as a stacked contract slice.
+3. Implement the minimum Set Intelligence runtime: intent/context/phase/state, hard gates, deterministic ranking and Top-N `recommend_next`.
+4. Only then implement bounded graph/path optimization.
 
-- `APPLAYLIST_PRODUCT_ARCHITECTURE_V3.md`,
-- `APPLAYLIST_MUSIC_DNA_CONTRACT_V1.md`,
-- `APPLAYLIST_TRANSITION_INTELLIGENCE_CONTRACT_V1.md`,
-- `APPLAYLIST_PROVIDER_GOVERNANCE_V1.md`.
-
-Do not start stems, producer features or broad semantic-model integration before the Bundle 51 minimum transition contract is proven.
+Do not start graph/vector database adoption, stems, producer features or broad semantic-model integration before these contracts and runtime gates are proven.
