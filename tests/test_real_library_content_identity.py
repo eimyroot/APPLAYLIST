@@ -11,6 +11,7 @@ class _FakeAnalyzer:
 
     def analyze(self, path: str) -> dict:
         return {
+            "status": "success",
             "provider": self.provider_name,
             "provider_version": "test-provider-v1",
             "algorithm_version": "test-algorithm-v1",
