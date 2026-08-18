@@ -603,15 +603,8 @@ fn validate_ready(ready: &SidecarReady, nonce: &str) -> Result<(), SetProposalBr
 }
 
 fn verify_health(port: u16, secret: &str, nonce: &str) -> Result<(), SetProposalBridgeError> {
-    let (status, body) = request_json(
-        port,
-        "GET",
-        "/v1/health",
-        secret,
-        nonce,
-        None,
-        HTTP_TIMEOUT,
-    )?;
+    let (status, body) =
+        request_json(port, "GET", "/v1/health", secret, nonce, None, HTTP_TIMEOUT)?;
     if status == 401 {
         return Err(SetProposalBridgeError::authentication_failed());
     }
@@ -814,9 +807,10 @@ mod tests {
         let safe = safe_fixture();
         assert!(parse_set_proposal(&safe).is_ok());
 
-        let escalation = String::from_utf8(safe.clone())
-            .expect("utf8")
-            .replace("\"activation_authorized\":false", "\"activation_authorized\":true");
+        let escalation = String::from_utf8(safe.clone()).expect("utf8").replace(
+            "\"activation_authorized\":false",
+            "\"activation_authorized\":true",
+        );
         assert!(parse_set_proposal(escalation.as_bytes()).is_err());
 
         let unknown = String::from_utf8(safe)
