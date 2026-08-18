@@ -12,6 +12,7 @@ fn main() {
             "analysis_inspector_get",
             "analysis_correct",
             "analysis_reanalyze",
+            "set_proposal_generate",
         ]),
     ))
     .expect("failed to configure APPLAYLIST desktop host build");

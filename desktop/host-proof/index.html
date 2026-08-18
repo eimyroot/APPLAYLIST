@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>APPLAYLIST Desktop</title>
   <link rel="stylesheet" href="./app.css">
+  <link rel="stylesheet" href="./set-proposal.css">
   <script src="./app.js" defer></script>
+  <script src="./set-proposal.js" defer></script>
 </head>
 <body>
   <main>
@@ -181,6 +183,25 @@
           </div>
         </form>
       </section>
+    </section>
+
+    <section id="set-proposal" aria-labelledby="set-proposal-heading">
+      <h2 id="set-proposal-heading">Set Proposal Inspector</h2>
+      <p>Build a read-only, explainable set proposal from already-persisted analysis evidence. This does not activate optimization or train the Personal DJ Model.</p>
+
+      <div class="actions">
+        <button id="set-proposal-refresh" type="button">Refresh analyzed tracks</button>
+        <label for="set-proposal-seed">Seed track</label>
+        <select id="set-proposal-seed" disabled></select>
+        <label for="set-proposal-target">Target tracks</label>
+        <input id="set-proposal-target" type="number" min="3" max="8" value="3" step="1" disabled>
+        <button id="set-proposal-generate" type="button" disabled>Generate set proposal</button>
+      </div>
+
+      <p id="set-proposal-status" class="status">Load analyzed tracks to begin.</p>
+      <p id="set-proposal-empty" class="empty-state">No successful analyzed tracks loaded.</p>
+      <ul id="set-proposal-track-list" class="proposal-track-list"></ul>
+      <div id="set-proposal-results"></div>
     </section>
   </main>
 </body>
