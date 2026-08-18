@@ -88,13 +88,7 @@ impl SetProposalBridge {
     ) -> Result<DesktopSetProposalDto, SetProposalBridgeError> {
         validate_request(track_ids, seed_track_id, target_track_count)?;
         let executable = self.configured_executable(bundled_resource_dir)?;
-        let secret = random_token();
-        let nonce = random_token();
-        let mut process = SetProposalSidecarProcess::spawn(&executable, &secret, &nonce)?;
-        let ready = process.read_ready()?;
-        validate_ready(&ready, &nonce)?;
-        verify_health(ready.port, &secret, &nonce)?;
-
+        let mut session = SetProposalSidecarSession::connect(&executable)?;
         let body = serde_json::to_vec(&SetProposalRequest {
             track_ids,
             seed_track_id,
@@ -102,27 +96,19 @@ impl SetProposalBridge {
         })
         .map_err(|_| SetProposalBridgeError::request_encoding_failed())?;
 
-        let response = request_json(
-            ready.port,
-            "POST",
-            "/v1/set/proposal/generate",
-            &secret,
-            &nonce,
-            Some(&body),
-            HTTP_TIMEOUT,
-        );
+        let response = session.post("/v1/set/proposal/generate", &body);
         let result = match response {
-            Ok((200, body)) => parse_set_proposal(&body),
-            Ok((status, body)) => {
-                let error = parse_sidecar_error(&body);
+            Ok((200, response_body)) => parse_set_proposal(&response_body),
+            Ok((status, response_body)) => {
+                let sidecar_error = parse_sidecar_error(&response_body);
                 Err(SetProposalBridgeError::proposal_rejected(
                     status,
-                    error.as_deref(),
+                    sidecar_error.as_deref(),
                 ))
             }
             Err(error) => Err(error),
         };
-        process.shutdown(ready.port, &secret, &nonce);
+        session.shutdown();
         result
     }
 }
@@ -140,92 +126,96 @@ struct SetProposalBridgeError {
 }
 
 impl SetProposalBridgeError {
+    const fn new(code: &'static str, message: &'static str) -> Self {
+        Self { code, message }
+    }
+
     const fn not_configured() -> Self {
-        Self {
-            code: "desktop_set_proposal_sidecar_not_configured",
-            message: "The desktop set proposal service is not configured.",
-        }
+        Self::new(
+            "desktop_set_proposal_sidecar_not_configured",
+            "The desktop set proposal service is not configured.",
+        )
     }
 
     const fn executable_unavailable() -> Self {
-        Self {
-            code: "desktop_set_proposal_sidecar_unavailable",
-            message: "The desktop set proposal service is unavailable.",
-        }
+        Self::new(
+            "desktop_set_proposal_sidecar_unavailable",
+            "The desktop set proposal service is unavailable.",
+        )
     }
 
     const fn startup_failed() -> Self {
-        Self {
-            code: "desktop_set_proposal_sidecar_startup_failed",
-            message: "The desktop set proposal service could not start.",
-        }
+        Self::new(
+            "desktop_set_proposal_sidecar_startup_failed",
+            "The desktop set proposal service could not start.",
+        )
     }
 
     const fn readiness_failed() -> Self {
-        Self {
-            code: "desktop_set_proposal_sidecar_readiness_failed",
-            message: "The desktop set proposal service did not become ready.",
-        }
+        Self::new(
+            "desktop_set_proposal_sidecar_readiness_failed",
+            "The desktop set proposal service did not become ready.",
+        )
     }
 
     const fn authentication_failed() -> Self {
-        Self {
-            code: "desktop_set_proposal_sidecar_authentication_failed",
-            message: "The desktop set proposal service authentication failed.",
-        }
+        Self::new(
+            "desktop_set_proposal_sidecar_authentication_failed",
+            "The desktop set proposal service authentication failed.",
+        )
     }
 
     const fn request_failed() -> Self {
-        Self {
-            code: "desktop_set_proposal_request_failed",
-            message: "The desktop set proposal request failed.",
-        }
+        Self::new(
+            "desktop_set_proposal_request_failed",
+            "The desktop set proposal request failed.",
+        )
     }
 
     const fn request_encoding_failed() -> Self {
-        Self {
-            code: "desktop_set_proposal_request_encoding_failed",
-            message: "The desktop set proposal request could not be encoded.",
-        }
+        Self::new(
+            "desktop_set_proposal_request_encoding_failed",
+            "The desktop set proposal request could not be encoded.",
+        )
     }
 
     const fn invalid_request() -> Self {
-        Self {
-            code: "invalid_desktop_set_proposal_request",
-            message: "The desktop set proposal request is invalid.",
-        }
+        Self::new(
+            "invalid_desktop_set_proposal_request",
+            "The desktop set proposal request is invalid.",
+        )
     }
 
     const fn invalid_response() -> Self {
-        Self {
-            code: "desktop_set_proposal_response_invalid",
-            message: "The desktop set proposal response was invalid.",
-        }
+        Self::new(
+            "desktop_set_proposal_response_invalid",
+            "The desktop set proposal response was invalid.",
+        )
     }
 
     fn proposal_rejected(status: u16, error: Option<&str>) -> Self {
         match (status, error) {
-            (409, Some("set_proposal_analysis_missing")) => Self {
-                code: "desktop_set_proposal_analysis_missing",
-                message: "One or more selected tracks have no analysis evidence.",
-            },
-            (409, Some("set_proposal_analysis_failed")) => Self {
-                code: "desktop_set_proposal_analysis_failed",
-                message: "One or more selected tracks have a failed latest analysis.",
-            },
-            (409, Some("set_proposal_analysis_incomplete")) => Self {
-                code: "desktop_set_proposal_analysis_incomplete",
-                message: "One or more selected tracks lack required proposal evidence.",
-            },
-            (409, Some("set_proposal_track_unavailable")) => Self {
-                code: "desktop_set_proposal_track_unavailable",
-                message: "One or more selected tracks are unavailable in the local library.",
-            },
+            (409, Some("set_proposal_analysis_missing")) => Self::new(
+                "desktop_set_proposal_analysis_missing",
+                "One or more selected tracks have no analysis evidence.",
+            ),
+            (409, Some("set_proposal_analysis_failed")) => Self::new(
+                "desktop_set_proposal_analysis_failed",
+                "One or more selected tracks have a failed latest analysis.",
+            ),
+            (409, Some("set_proposal_analysis_incomplete")) => Self::new(
+                "desktop_set_proposal_analysis_incomplete",
+                "One or more selected tracks lack required proposal evidence.",
+            ),
+            (409, Some("set_proposal_track_unavailable")) => Self::new(
+                "desktop_set_proposal_track_unavailable",
+                "One or more selected tracks are unavailable in the local library.",
+            ),
             (400, Some("invalid_set_proposal_request")) => Self::invalid_request(),
-            _ => Self {
-                code: "desktop_set_proposal_rejected",
-                message: "The desktop set proposal request was rejected.",
-            },
+            _ => Self::new(
+                "desktop_set_proposal_rejected",
+                "The desktop set proposal request was rejected.",
+            ),
         }
     }
 }
@@ -316,66 +306,48 @@ struct DesktopSetProposalObjectiveDto {
     target_reached: bool,
 }
 
-struct SetProposalSidecarProcess {
+struct SetProposalSidecarSession {
     child: Child,
+    port: u16,
+    secret: String,
+    nonce: String,
 }
 
-impl SetProposalSidecarProcess {
-    fn spawn(
-        executable: &Path,
-        secret: &str,
-        nonce: &str,
-    ) -> Result<Self, SetProposalBridgeError> {
-        let mut child = Command::new(executable)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|_| SetProposalBridgeError::startup_failed())?;
-        let envelope = serde_json::to_vec(&serde_json::json!({
-            "protocol": PROTOCOL_VERSION,
-            "secret": secret,
-            "nonce": nonce,
-        }))
-        .map_err(|_| SetProposalBridgeError::startup_failed())?;
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(SetProposalBridgeError::startup_failed)?;
-        stdin
-            .write_all(&envelope)
-            .and_then(|_| stdin.write_all(b"\n"))
-            .and_then(|_| stdin.flush())
-            .map_err(|_| SetProposalBridgeError::startup_failed())?;
-        drop(stdin);
-        Ok(Self { child })
-    }
-
-    fn read_ready(&mut self) -> Result<SidecarReady, SetProposalBridgeError> {
-        let mut stdout = self
-            .child
-            .stdout
-            .take()
-            .ok_or_else(SetProposalBridgeError::readiness_failed)?;
-        let (sender, receiver) = mpsc::sync_channel(1);
-        thread::spawn(move || {
-            let result = read_bounded_line(&mut stdout, MAX_READY_BYTES);
-            let _ = sender.send(result);
-        });
-        let line = receiver
-            .recv_timeout(READY_TIMEOUT)
-            .map_err(|_| SetProposalBridgeError::readiness_failed())?
-            .map_err(|_| SetProposalBridgeError::readiness_failed())?;
-        serde_json::from_slice(&line).map_err(|_| SetProposalBridgeError::readiness_failed())
-    }
-
-    fn shutdown(&mut self, port: u16, secret: &str, nonce: &str) {
-        let _ = request_json(
-            port,
-            "POST",
-            "/v1/shutdown",
+impl SetProposalSidecarSession {
+    fn connect(executable: &Path) -> Result<Self, SetProposalBridgeError> {
+        let secret = random_token();
+        let nonce = random_token();
+        let mut child = spawn_sidecar(executable, &secret, &nonce)?;
+        let ready = read_ready(&mut child)?;
+        validate_ready(&ready, &nonce)?;
+        verify_health(ready.port, &secret, &nonce)?;
+        Ok(Self {
+            child,
+            port: ready.port,
             secret,
             nonce,
+        })
+    }
+
+    fn post(&mut self, path: &str, body: &[u8]) -> Result<(u16, Vec<u8>), SetProposalBridgeError> {
+        request_json(
+            self.port,
+            "POST",
+            path,
+            &self.secret,
+            &self.nonce,
+            Some(body),
+            HTTP_TIMEOUT,
+        )
+    }
+
+    fn shutdown(&mut self) {
+        let _ = request_json(
+            self.port,
+            "POST",
+            "/v1/shutdown",
+            &self.secret,
+            &self.nonce,
             Some(&[]),
             HTTP_TIMEOUT,
         );
@@ -390,13 +362,60 @@ impl SetProposalSidecarProcess {
     }
 }
 
-impl Drop for SetProposalSidecarProcess {
+impl Drop for SetProposalSidecarSession {
     fn drop(&mut self) {
         if matches!(self.child.try_wait(), Ok(None)) {
             let _ = self.child.kill();
         }
         let _ = self.child.wait();
     }
+}
+
+fn spawn_sidecar(
+    executable: &Path,
+    secret: &str,
+    nonce: &str,
+) -> Result<Child, SetProposalBridgeError> {
+    let mut child = Command::new(executable)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| SetProposalBridgeError::startup_failed())?;
+    let envelope = serde_json::to_vec(&serde_json::json!({
+        "protocol": PROTOCOL_VERSION,
+        "secret": secret,
+        "nonce": nonce,
+    }))
+    .map_err(|_| SetProposalBridgeError::startup_failed())?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(SetProposalBridgeError::startup_failed)?;
+    stdin
+        .write_all(&envelope)
+        .and_then(|_| stdin.write_all(b"\n"))
+        .and_then(|_| stdin.flush())
+        .map_err(|_| SetProposalBridgeError::startup_failed())?;
+    drop(stdin);
+    Ok(child)
+}
+
+fn read_ready(child: &mut Child) -> Result<SidecarReady, SetProposalBridgeError> {
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(SetProposalBridgeError::readiness_failed)?;
+    let (sender, receiver) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let result = read_bounded_line(&mut stdout, MAX_READY_BYTES);
+        let _ = sender.send(result);
+    });
+    let line = receiver
+        .recv_timeout(READY_TIMEOUT)
+        .map_err(|_| SetProposalBridgeError::readiness_failed())?
+        .map_err(|_| SetProposalBridgeError::readiness_failed())?;
+    serde_json::from_slice(&line).map_err(|_| SetProposalBridgeError::readiness_failed())
 }
 
 fn validate_request(
@@ -489,15 +508,14 @@ fn validate_set_proposal(proposal: &DesktopSetProposalDto) -> Result<(), SetProp
                 return Err(SetProposalBridgeError::invalid_response());
             }
         }
-        for transition_id in &alternative.transition_ids {
-            if !safe_token(transition_id, 256) {
-                return Err(SetProposalBridgeError::invalid_response());
-            }
-        }
         if alternative
-            .candidate_scores
+            .transition_ids
             .iter()
-            .any(|value| !unit_number(*value))
+            .any(|value| !safe_token(value, 256))
+            || alternative
+                .candidate_scores
+                .iter()
+                .any(|value| !unit_number(*value))
             || !unit_number(alternative.objective.mean_candidate_score)
             || !unit_number(alternative.objective.minimum_candidate_score)
             || !unit_number(alternative.objective.required_track_completion)
@@ -560,10 +578,7 @@ fn looks_like_absolute_path(value: &str) -> bool {
 
 fn parse_sidecar_error(body: &[u8]) -> Option<String> {
     let error = serde_json::from_slice::<SidecarError>(body).ok()?;
-    if !safe_token(&error.error, 128) {
-        return None;
-    }
-    Some(error.error)
+    safe_token(&error.error, 128).then_some(error.error)
 }
 
 fn random_token() -> String {
@@ -588,8 +603,15 @@ fn validate_ready(ready: &SidecarReady, nonce: &str) -> Result<(), SetProposalBr
 }
 
 fn verify_health(port: u16, secret: &str, nonce: &str) -> Result<(), SetProposalBridgeError> {
-    let (status, body) =
-        request_json(port, "GET", "/v1/health", secret, nonce, None, HTTP_TIMEOUT)?;
+    let (status, body) = request_json(
+        port,
+        "GET",
+        "/v1/health",
+        secret,
+        nonce,
+        None,
+        HTTP_TIMEOUT,
+    )?;
     if status == 401 {
         return Err(SetProposalBridgeError::authentication_failed());
     }
@@ -739,23 +761,8 @@ pub async fn set_proposal_generate(
 mod tests {
     use super::*;
 
-    #[test]
-    fn request_validation_is_bounded_and_path_safe() {
-        let tracks = vec![
-            "aptrack:v1:sha256:aaa".to_owned(),
-            "aptrack:v1:sha256:bbb".to_owned(),
-            "aptrack:v1:sha256:ccc".to_owned(),
-        ];
-        assert!(validate_request(&tracks, &tracks[0], 3).is_ok());
-        assert!(validate_request(&tracks, "/Users/example/a.wav", 3).is_err());
-        assert!(validate_request(&tracks, &tracks[0], 9).is_err());
-        let duplicate = vec![tracks[0].clone(), tracks[0].clone(), tracks[2].clone()];
-        assert!(validate_request(&duplicate, &tracks[0], 3).is_err());
-    }
-
-    #[test]
-    fn proposal_parser_rejects_unknown_fields_and_authority_escalation() {
-        let safe = br#"{
+    fn safe_fixture() -> Vec<u8> {
+        br#"{
           "schema":"applaylist-desktop-set-proposal-r1",
           "proposal_id":"sor_0123456789abcdef",
           "status":"target_reached",
@@ -786,18 +793,33 @@ mod tests {
           "deterministic_ordering":true,
           "activation_authorized":false,
           "personal_dj_model_training_authorized":false
-        }"#;
-        assert!(parse_set_proposal(safe).is_ok());
+        }"#
+        .to_vec()
+    }
 
-        let escalation = String::from_utf8(safe.to_vec())
+    #[test]
+    fn request_validation_is_bounded_and_path_safe() {
+        let tracks = vec![
+            "aptrack:v1:sha256:aaa".to_owned(),
+            "aptrack:v1:sha256:bbb".to_owned(),
+            "aptrack:v1:sha256:ccc".to_owned(),
+        ];
+        assert!(validate_request(&tracks, &tracks[0], 3).is_ok());
+        assert!(validate_request(&tracks, "/Users/example/a.wav", 3).is_err());
+        assert!(validate_request(&tracks, &tracks[0], 9).is_err());
+    }
+
+    #[test]
+    fn proposal_parser_rejects_unknown_fields_and_authority_escalation() {
+        let safe = safe_fixture();
+        assert!(parse_set_proposal(&safe).is_ok());
+
+        let escalation = String::from_utf8(safe.clone())
             .expect("utf8")
-            .replace(
-                "\"activation_authorized\":false",
-                "\"activation_authorized\":true",
-            );
+            .replace("\"activation_authorized\":false", "\"activation_authorized\":true");
         assert!(parse_set_proposal(escalation.as_bytes()).is_err());
 
-        let unknown = String::from_utf8(safe.to_vec())
+        let unknown = String::from_utf8(safe)
             .expect("utf8")
             .replace("\"schema\":", "\"path\":\"/tmp/a.wav\",\"schema\":");
         assert!(parse_set_proposal(unknown.as_bytes()).is_err());

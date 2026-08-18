@@ -115,7 +115,7 @@ def test_set_proposal_is_deterministic_evidence_only_and_path_safe(
     assert "future_feasibility_not_hard_prune_v1" in encoded
 
 
-def test_active_correction_changes_revision_without_overwriting_provider_evidence(
+def test_active_correction_changes_path_revision_without_overwriting_provider_evidence(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -147,7 +147,9 @@ def test_active_correction_changes_revision_without_overwriting_provider_evidenc
         target_track_count=3,
     )
 
-    assert after["proposal_id"] != before["proposal_id"]
+    before_path = before["alternatives"][0]["path_id"]
+    after_path = after["alternatives"][0]["path_id"]
+    assert after_path != before_path
     persisted_base = evidence.get_evidence(base.evidence_id)
     assert persisted_base is not None
     assert persisted_base.bpm == original_bpm
@@ -178,7 +180,8 @@ def test_latest_failed_or_incomplete_analysis_fails_closed(
     assert failed.value.code == "set_proposal_analysis_failed"
 
     get_settings.cache_clear()
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(tmp_path / 'incomplete.db').resolve()}")
+    incomplete_database = (tmp_path / "incomplete.db").resolve()
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{incomplete_database}")
     get_settings.cache_clear()
     incomplete_ids = _seed_tracks(missing_energy_index=1)
     with pytest.raises(DesktopSetProposalTransportError) as incomplete:
