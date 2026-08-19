@@ -47,14 +47,18 @@ impl PlaylistEditorBridge {
 
     fn executable(&self, resource_dir: Option<&Path>) -> Result<PathBuf, EditorError> {
         if let Some(path) = self.executable.as_ref() {
-            let canonical = path.canonicalize().map_err(|_| EditorError::unavailable())?;
+            let canonical = path
+                .canonicalize()
+                .map_err(|_| EditorError::unavailable())?;
             return canonical
                 .is_file()
                 .then_some(canonical)
                 .ok_or_else(EditorError::unavailable);
         }
         let root = resource_dir.ok_or_else(EditorError::not_configured)?;
-        let root = root.canonicalize().map_err(|_| EditorError::unavailable())?;
+        let root = root
+            .canonicalize()
+            .map_err(|_| EditorError::unavailable())?;
         let binary = root
             .join(BUNDLED_SIDECAR_RESOURCE)
             .canonicalize()
@@ -80,11 +84,16 @@ impl PlaylistEditorBridge {
         if status != 200 {
             let code = serde_json::from_slice::<Value>(&bytes)
                 .ok()
-                .and_then(|value| value.get("error").and_then(Value::as_str).map(str::to_owned));
+                .and_then(|value| {
+                    value
+                        .get("error")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                });
             return Err(EditorError::rejected(code.as_deref()));
         }
-        let value = serde_json::from_slice::<Value>(&bytes)
-            .map_err(|_| EditorError::invalid_response())?;
+        let value =
+            serde_json::from_slice::<Value>(&bytes).map_err(|_| EditorError::invalid_response())?;
         Ok(value)
     }
 }
@@ -149,9 +158,10 @@ impl EditorError {
     }
     fn rejected(code: Option<&str>) -> Self {
         match code {
-            Some("playlist_proposal_stale") => {
-                Self::new("playlist_proposal_stale", "The displayed proposal is stale.")
-            }
+            Some("playlist_proposal_stale") => Self::new(
+                "playlist_proposal_stale",
+                "The displayed proposal is stale.",
+            ),
             Some("playlist_revision_stale") => {
                 Self::new("playlist_revision_stale", "The playlist revision is stale.")
             }
@@ -240,8 +250,7 @@ impl Session {
         let ready: Value =
             serde_json::from_slice(&line).map_err(|_| EditorError::readiness_failed())?;
         let port = validate_ready(&ready, &nonce)?;
-        let (status, health) =
-            request_json(port, "GET", "/v1/health", &secret, &nonce, None)?;
+        let (status, health) = request_json(port, "GET", "/v1/health", &secret, &nonce, None)?;
         if status != 200 {
             return Err(EditorError::readiness_failed());
         }
@@ -303,7 +312,10 @@ impl Drop for Session {
 }
 
 fn read_ready(child: &mut Child) -> Result<Vec<u8>, EditorError> {
-    let mut stdout = child.stdout.take().ok_or_else(EditorError::readiness_failed)?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(EditorError::readiness_failed)?;
     let (sender, receiver) = mpsc::sync_channel(1);
     thread::spawn(move || {
         let mut line = Vec::new();
@@ -337,11 +349,7 @@ fn validate_ready(value: &Value, nonce: &str) -> Result<u16, EditorError> {
         || value.get("protocol").and_then(Value::as_str) != Some(PROTOCOL_VERSION)
         || value.get("host").and_then(Value::as_str) != Some("127.0.0.1")
         || value.get("nonce_sha256").and_then(Value::as_str) != Some(nonce_hash.as_str())
-        || value
-            .get("process_id")
-            .and_then(Value::as_u64)
-            .unwrap_or(0)
-            == 0
+        || value.get("process_id").and_then(Value::as_u64).unwrap_or(0) == 0
     {
         return Err(EditorError::readiness_failed());
     }
@@ -362,8 +370,8 @@ fn request_json(
     body: Option<&[u8]>,
 ) -> Result<(u16, Vec<u8>), EditorError> {
     let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    let mut stream =
-        TcpStream::connect_timeout(&address, HTTP_TIMEOUT).map_err(|_| EditorError::request_failed())?;
+    let mut stream = TcpStream::connect_timeout(&address, HTTP_TIMEOUT)
+        .map_err(|_| EditorError::request_failed())?;
     stream
         .set_read_timeout(Some(HTTP_TIMEOUT))
         .map_err(|_| EditorError::request_failed())?;
@@ -513,7 +521,8 @@ fn validate_revision(value: &Value) -> Result<(), EditorError> {
         if !parent.is_null() || object["operation"].as_str() != Some("accept") {
             return Err(EditorError::invalid_response());
         }
-    } else if !parent.as_str().is_some_and(token) || object["operation"].as_str() == Some("accept") {
+    } else if !parent.as_str().is_some_and(token) || object["operation"].as_str() == Some("accept")
+    {
         return Err(EditorError::invalid_response());
     }
     let sequence = object["sequence"]
