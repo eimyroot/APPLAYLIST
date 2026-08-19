@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="./set-proposal.css">
   <link rel="stylesheet" href="./playlist-editor.css">
   <script src="./app.js" defer></script>
+  <script src="./playlist-export.js" defer></script>
   <script src="./playlist-editor.js" defer></script>
   <script src="./set-proposal.js" defer></script>
 </head>
@@ -160,6 +161,20 @@
       <div id="playlist-editor-source"></div>
       <div id="playlist-editor-current"></div>
       <div id="playlist-editor-history"></div>
+    </section>
+
+    <section id="playlist-export" aria-labelledby="playlist-export-heading">
+      <h2 id="playlist-export-heading">Playlist Export</h2>
+      <p>Export one explicitly selected immutable revision as UTF-8 M3U8. File paths stay inside the trusted sidecar/Tauri boundary and are never rendered here.</p>
+      <div class="actions">
+        <label for="playlist-export-revision">Revision</label>
+        <select id="playlist-export-revision" disabled></select>
+        <button id="playlist-export-preview" type="button" disabled>Preview export</button>
+        <button id="playlist-export-write" type="button" disabled>Export M3U8…</button>
+      </div>
+      <p id="playlist-export-status" class="status">Accept a Set Proposal revision to enable export.</p>
+      <div id="playlist-export-preview-result"></div>
+      <div id="playlist-export-receipt"></div>
     </section>
   </main>
 </body>

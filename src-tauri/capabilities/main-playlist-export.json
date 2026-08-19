@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-playlist-export",
+  "description": "Allow the local main window to preview and explicitly export one immutable APPLAYLIST playlist revision as M3U8.",
+  "local": true,
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "permissions": [
+    "allow-playlist-export-preview",
+    "allow-playlist-export-m3u8"
+  ]
+}

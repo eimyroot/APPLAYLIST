@@ -18,6 +18,8 @@ fn main() {
             "playlist_editor_lock",
             "playlist_editor_replace",
             "playlist_editor_history",
+            "playlist_export_preview",
+            "playlist_export_m3u8",
         ]),
     ))
     .expect("failed to configure APPLAYLIST desktop host build");
