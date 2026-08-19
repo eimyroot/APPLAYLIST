@@ -314,7 +314,9 @@ impl Session {
         let nonce_hash = sha256_hex(nonce.as_bytes());
         if health.get("status").and_then(serde_json::Value::as_str) != Some("ready")
             || health.get("protocol").and_then(serde_json::Value::as_str) != Some(PROTOCOL_VERSION)
-            || health.get("nonce_sha256").and_then(serde_json::Value::as_str)
+            || health
+                .get("nonce_sha256")
+                .and_then(serde_json::Value::as_str)
                 != Some(nonce_hash.as_str())
         {
             return Err(ExportError::readiness_failed());
@@ -404,7 +406,9 @@ fn validate_ready(value: &serde_json::Value, nonce: &str) -> Result<u16, ExportE
     if value.get("event").and_then(serde_json::Value::as_str) != Some("ready")
         || value.get("protocol").and_then(serde_json::Value::as_str) != Some(PROTOCOL_VERSION)
         || value.get("host").and_then(serde_json::Value::as_str) != Some("127.0.0.1")
-        || value.get("nonce_sha256").and_then(serde_json::Value::as_str)
+        || value
+            .get("nonce_sha256")
+            .and_then(serde_json::Value::as_str)
             != Some(nonce_hash.as_str())
         || value
             .get("process_id")
@@ -610,7 +614,12 @@ fn normalize_target(mut target: PathBuf) -> Result<PathBuf, ExportError> {
         Some(_) => return Err(ExportError::invalid_target()),
     }
     let parent = target.parent().ok_or_else(ExportError::invalid_target)?;
-    if !parent.is_dir() || target.file_name().and_then(|value| value.to_str()).is_none() {
+    if !parent.is_dir()
+        || target
+            .file_name()
+            .and_then(|value| value.to_str())
+            .is_none()
+    {
         return Err(ExportError::invalid_target());
     }
     if target.exists() {
@@ -673,13 +682,7 @@ pub async fn playlist_export_preview(
     bridge: State<'_, PlaylistExportBridge>,
     app: AppHandle,
 ) -> Result<PlaylistExportPreview, DesktopHostError> {
-    let bytes = request_bytes(
-        bridge,
-        &app,
-        "/v1/playlist/export/preview",
-        revision_id,
-    )
-    .await?;
+    let bytes = request_bytes(bridge, &app, "/v1/playlist/export/preview", revision_id).await?;
     let preview: PlaylistExportPreview =
         serde_json::from_slice(&bytes).map_err(|_| ExportError::invalid_response())?;
     validate_preview(&preview).map_err(DesktopHostError::from)?;
@@ -692,13 +695,7 @@ pub async fn playlist_export_m3u8(
     bridge: State<'_, PlaylistExportBridge>,
     app: AppHandle,
 ) -> Result<Option<PlaylistExportReceipt>, DesktopHostError> {
-    let bytes = request_bytes(
-        bridge,
-        &app,
-        "/v1/playlist/export/material",
-        revision_id,
-    )
-    .await?;
+    let bytes = request_bytes(bridge, &app, "/v1/playlist/export/material", revision_id).await?;
     let material: PlaylistExportMaterial =
         serde_json::from_slice(&bytes).map_err(|_| ExportError::invalid_response())?;
     validate_material(&material).map_err(DesktopHostError::from)?;
@@ -808,7 +805,10 @@ mod tests {
         ));
         fs::create_dir_all(&root).expect("create target root");
         let without_extension = normalize_target(root.join("playlist")).expect("normalize target");
-        assert_eq!(without_extension.extension().and_then(|v| v.to_str()), Some("m3u8"));
+        assert_eq!(
+            without_extension.extension().and_then(|v| v.to_str()),
+            Some("m3u8")
+        );
         assert!(normalize_target(root.join("playlist.txt")).is_err());
         fs::write(root.join("exists.m3u8"), b"existing").expect("write existing");
         assert!(normalize_target(root.join("exists.m3u8")).is_err());
