@@ -88,7 +88,12 @@ impl PlaylistEvidenceExportBridge {
         if status != 200 {
             let code = serde_json::from_slice::<Value>(&bytes)
                 .ok()
-                .and_then(|value| value.get("error").and_then(Value::as_str).map(str::to_owned));
+                .and_then(|value| {
+                    value
+                        .get("error")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                });
             return Err(EvidenceExportError::rejected(code.as_deref()));
         }
         Ok(bytes)
@@ -284,7 +289,10 @@ impl Session {
             "nonce": nonce
         }))
         .map_err(|_| EvidenceExportError::startup_failed())?;
-        let mut stdin = child.stdin.take().ok_or_else(EvidenceExportError::startup_failed)?;
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(EvidenceExportError::startup_failed)?;
         stdin
             .write_all(&envelope)
             .and_then(|_| stdin.write_all(b"\n"))
@@ -451,8 +459,8 @@ fn request_json(
         .windows(4)
         .position(|window| window == b"\r\n\r\n")
         .ok_or_else(EvidenceExportError::request_failed)?;
-    let headers =
-        std::str::from_utf8(&response[..boundary]).map_err(|_| EvidenceExportError::request_failed())?;
+    let headers = std::str::from_utf8(&response[..boundary])
+        .map_err(|_| EvidenceExportError::request_failed())?;
     let mut lines = headers.split("\r\n");
     let mut parts = lines
         .next()
@@ -558,9 +566,14 @@ fn validate_document(value: &Value, material: &PlaylistEvidenceMaterial) -> bool
         ],
     ) || root.get("schema").and_then(Value::as_str)
         != Some("applaylist-playlist-revision-evidence-r1")
-        || root.get("personal_dj_model_training_authorized").and_then(Value::as_bool)
+        || root
+            .get("personal_dj_model_training_authorized")
+            .and_then(Value::as_bool)
             != Some(false)
-        || root.get("production_activation_authorized").and_then(Value::as_bool) != Some(false)
+        || root
+            .get("production_activation_authorized")
+            .and_then(Value::as_bool)
+            != Some(false)
     {
         return false;
     }
@@ -580,8 +593,10 @@ fn validate_document(value: &Value, material: &PlaylistEvidenceMaterial) -> bool
             "content_fingerprint",
             "created_at",
         ],
-    ) || revision.get("revision_id").and_then(Value::as_str) != Some(material.revision_id.as_str())
-        || revision.get("playlist_id").and_then(Value::as_str) != Some(material.playlist_id.as_str())
+    ) || revision.get("revision_id").and_then(Value::as_str)
+        != Some(material.revision_id.as_str())
+        || revision.get("playlist_id").and_then(Value::as_str)
+            != Some(material.playlist_id.as_str())
         || revision.get("revision_index").and_then(Value::as_u64)
             != Some(material.revision_index as u64)
     {
@@ -604,7 +619,13 @@ fn validate_document(value: &Value, material: &PlaylistEvidenceMaterial) -> bool
     };
     if !exact_keys(
         verification,
-        &["path_valid", "format", "track_count", "content_sha256", "byte_count"],
+        &[
+            "path_valid",
+            "format",
+            "track_count",
+            "content_sha256",
+            "byte_count",
+        ],
     ) || verification.get("path_valid").and_then(Value::as_bool) != Some(true)
         || verification.get("format").and_then(Value::as_str) != Some("m3u8")
         || verification.get("track_count").and_then(Value::as_u64)
@@ -620,8 +641,10 @@ fn validate_document(value: &Value, material: &PlaylistEvidenceMaterial) -> bool
 fn contains_forbidden_path_key(value: &Value) -> bool {
     match value {
         Value::Object(map) => map.iter().any(|(key, child)| {
-            matches!(key.as_str(), "path" | "file_path" | "source_path" | "output_path")
-                || contains_forbidden_path_key(child)
+            matches!(
+                key.as_str(),
+                "path" | "file_path" | "source_path" | "output_path"
+            ) || contains_forbidden_path_key(child)
         }),
         Value::Array(items) => items.iter().any(contains_forbidden_path_key),
         _ => false,
@@ -647,8 +670,8 @@ fn validate_material(value: &PlaylistEvidenceMaterial) -> Result<(), EvidenceExp
     {
         return Err(EvidenceExportError::invalid_response());
     }
-    let document: Value =
-        serde_json::from_str(&value.content_utf8).map_err(|_| EvidenceExportError::invalid_response())?;
+    let document: Value = serde_json::from_str(&value.content_utf8)
+        .map_err(|_| EvidenceExportError::invalid_response())?;
     if !validate_document(&document, value) {
         return Err(EvidenceExportError::invalid_response());
     }
@@ -664,7 +687,9 @@ fn normalize_target(mut target: PathBuf) -> Result<PathBuf, EvidenceExportError>
         Some(value) if value.eq_ignore_ascii_case("json") => {}
         Some(_) => return Err(EvidenceExportError::invalid_target()),
     }
-    let parent = target.parent().ok_or_else(EvidenceExportError::invalid_target)?;
+    let parent = target
+        .parent()
+        .ok_or_else(EvidenceExportError::invalid_target)?;
     if !parent.is_dir()
         || target
             .file_name()
@@ -680,7 +705,9 @@ fn normalize_target(mut target: PathBuf) -> Result<PathBuf, EvidenceExportError>
 }
 
 fn write_atomic(target: &Path, content: &[u8]) -> Result<(), EvidenceExportError> {
-    let parent = target.parent().ok_or_else(EvidenceExportError::invalid_target)?;
+    let parent = target
+        .parent()
+        .ok_or_else(EvidenceExportError::invalid_target)?;
     let temporary = parent.join(format!(
         ".applaylist-evidence-export-{}.tmp",
         Uuid::new_v4().simple()
@@ -733,13 +760,7 @@ pub async fn playlist_evidence_preview(
     bridge: State<'_, PlaylistEvidenceExportBridge>,
     app: AppHandle,
 ) -> Result<PlaylistEvidencePreview, DesktopHostError> {
-    let bytes = request_bytes(
-        bridge,
-        &app,
-        "/v1/playlist/evidence/preview",
-        revision_id,
-    )
-    .await?;
+    let bytes = request_bytes(bridge, &app, "/v1/playlist/evidence/preview", revision_id).await?;
     let preview: PlaylistEvidencePreview =
         serde_json::from_slice(&bytes).map_err(|_| EvidenceExportError::invalid_response())?;
     validate_preview(&preview).map_err(DesktopHostError::from)?;
@@ -752,13 +773,7 @@ pub async fn playlist_evidence_export_json(
     bridge: State<'_, PlaylistEvidenceExportBridge>,
     app: AppHandle,
 ) -> Result<Option<PlaylistEvidenceExportReceipt>, DesktopHostError> {
-    let bytes = request_bytes(
-        bridge,
-        &app,
-        "/v1/playlist/evidence/material",
-        revision_id,
-    )
-    .await?;
+    let bytes = request_bytes(bridge, &app, "/v1/playlist/evidence/material", revision_id).await?;
     let material: PlaylistEvidenceMaterial =
         serde_json::from_slice(&bytes).map_err(|_| EvidenceExportError::invalid_response())?;
     validate_material(&material).map_err(DesktopHostError::from)?;
@@ -852,7 +867,9 @@ mod tests {
         fs::create_dir_all(&root).expect("create target root");
         let without_extension = normalize_target(root.join("evidence")).expect("normalize target");
         assert_eq!(
-            without_extension.extension().and_then(|value| value.to_str()),
+            without_extension
+                .extension()
+                .and_then(|value| value.to_str()),
             Some("json")
         );
         assert!(normalize_target(root.join("evidence.txt")).is_err());
