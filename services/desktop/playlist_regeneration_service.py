@@ -174,7 +174,7 @@ class DesktopPlaylistRegenerationService:
                 "The regeneration preview identity is unavailable.",
             )
         evidence_state: list[dict[str, object]] = []
-        for raw_track_id in candidate_track_ids:
+        for raw_track_id in sorted(candidate_track_ids):
             track_id = self._token(raw_track_id, "track_id")
             attempt = self._evidence.latest_evidence_for_track(track_id)
             success = self._evidence.latest_success_for_track(track_id)
