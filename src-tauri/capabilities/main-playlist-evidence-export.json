@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-playlist-evidence-export",
+  "description": "Allow the local main window to preview and explicitly export governed JSON evidence for one immutable playlist revision.",
+  "local": true,
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "permissions": [
+    "allow-playlist-evidence-preview",
+    "allow-playlist-evidence-export-json"
+  ]
+}
