@@ -486,8 +486,8 @@ fn request_json(
         .windows(4)
         .position(|window| window == b"\r\n\r\n")
         .ok_or_else(VendorInteropError::request_failed)?;
-    let headers =
-        std::str::from_utf8(&response[..boundary]).map_err(|_| VendorInteropError::request_failed())?;
+    let headers = std::str::from_utf8(&response[..boundary])
+        .map_err(|_| VendorInteropError::request_failed())?;
     let mut lines = headers.split("\r\n");
     let mut parts = lines
         .next()
@@ -650,7 +650,9 @@ fn normalize_xml_target(mut target: PathBuf) -> Result<PathBuf, VendorInteropErr
         Some(value) if value.eq_ignore_ascii_case("xml") => {}
         Some(_) => return Err(VendorInteropError::invalid_target()),
     }
-    let parent = target.parent().ok_or_else(VendorInteropError::invalid_target)?;
+    let parent = target
+        .parent()
+        .ok_or_else(VendorInteropError::invalid_target)?;
     if !parent.is_dir()
         || target
             .file_name()
@@ -666,7 +668,9 @@ fn normalize_xml_target(mut target: PathBuf) -> Result<PathBuf, VendorInteropErr
 }
 
 fn write_atomic(target: &Path, content: &[u8]) -> Result<(), VendorInteropError> {
-    let parent = target.parent().ok_or_else(VendorInteropError::invalid_target)?;
+    let parent = target
+        .parent()
+        .ok_or_else(VendorInteropError::invalid_target)?;
     let temporary = parent.join(format!(
         ".applaylist-vendor-export-{}.tmp",
         Uuid::new_v4().simple()
@@ -719,13 +723,7 @@ pub async fn playlist_vendor_interop_preview(
     bridge: State<'_, PlaylistVendorInteropBridge>,
     app: AppHandle,
 ) -> Result<VendorInteropPreview, DesktopHostError> {
-    let bytes = request_bytes(
-        bridge,
-        &app,
-        "/v1/playlist/vendor/preview",
-        revision_id,
-    )
-    .await?;
+    let bytes = request_bytes(bridge, &app, "/v1/playlist/vendor/preview", revision_id).await?;
     let preview: VendorInteropPreview =
         serde_json::from_slice(&bytes).map_err(|_| VendorInteropError::invalid_response())?;
     validate_preview(&preview).map_err(DesktopHostError::from)?;
