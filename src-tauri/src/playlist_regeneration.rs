@@ -82,12 +82,14 @@ impl PlaylistRegenerationBridge {
         session.shutdown();
         let (status, bytes) = response?;
         if status != 200 {
-            let code = serde_json::from_slice::<Value>(&bytes).ok().and_then(|value| {
-                value
-                    .get("error")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
-            });
+            let code = serde_json::from_slice::<Value>(&bytes)
+                .ok()
+                .and_then(|value| {
+                    value
+                        .get("error")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                });
             return Err(RegenerationError::rejected(code.as_deref()));
         }
         serde_json::from_slice(&bytes).map_err(|_| RegenerationError::invalid_response())
@@ -552,7 +554,13 @@ fn validate_regeneration(value: &Value, revision_id: &str) -> Result<(), Regener
     for (alternative_index, alternative) in alternatives.iter().enumerate() {
         let row = exact(
             alternative,
-            &["path_id", "rank", "sequence", "objective", "explanation_codes"],
+            &[
+                "path_id",
+                "rank",
+                "sequence",
+                "objective",
+                "explanation_codes",
+            ],
         )
         .ok_or_else(RegenerationError::invalid_response)?;
         if !row["path_id"].as_str().is_some_and(token)
@@ -600,14 +608,13 @@ fn validate_regeneration(value: &Value, revision_id: &str) -> Result<(), Regener
             {
                 return Err(RegenerationError::invalid_response());
             }
-            let expected_lock = locks.iter().find(|lock| {
-                lock.get("order_index").and_then(Value::as_u64) == Some(index as u64)
-            });
+            let expected_lock = locks
+                .iter()
+                .find(|lock| lock.get("order_index").and_then(Value::as_u64) == Some(index as u64));
             match expected_lock {
                 Some(lock) => {
                     if item["locked"].as_bool() != Some(true)
-                        || item["track_id"].as_str()
-                            != lock.get("track_id").and_then(Value::as_str)
+                        || item["track_id"].as_str() != lock.get("track_id").and_then(Value::as_str)
                     {
                         return Err(RegenerationError::invalid_response());
                     }
