@@ -10,6 +10,7 @@
   <script src="./app.js" defer></script>
   <script src="./playlist-export.js" defer></script>
   <script src="./playlist-evidence-export.js" defer></script>
+  <script src="./playlist-vendor-interop.js" defer></script>
   <script src="./playlist-editor.js" defer></script>
   <script src="./set-proposal.js" defer></script>
 </head>
@@ -190,6 +191,20 @@
       <p id="playlist-evidence-status" class="status">Accept a Set Proposal revision to enable evidence export.</p>
       <div id="playlist-evidence-preview-result"></div>
       <div id="playlist-evidence-receipt"></div>
+    </section>
+
+    <section id="playlist-vendor-interop" aria-labelledby="playlist-vendor-interop-heading">
+      <h2 id="playlist-vendor-interop-heading">Vendor Interoperability Handoff</h2>
+      <p>Verify documented DJ-library handoff capabilities for one exact immutable revision. Only rekordbox XML Bridge artifact export is writable in R1; Traktor and Serato remain guidance-only.</p>
+      <div class="actions">
+        <label for="playlist-vendor-interop-revision">Revision</label>
+        <select id="playlist-vendor-interop-revision" disabled></select>
+        <button id="playlist-vendor-interop-preview" type="button" disabled>Verify vendor handoff</button>
+        <button id="playlist-vendor-interop-rekordbox" type="button" disabled>Export rekordbox XML…</button>
+      </div>
+      <p id="playlist-vendor-interop-status" class="status">Accept a Set Proposal revision to enable vendor handoff.</p>
+      <div id="playlist-vendor-interop-capabilities"></div>
+      <div id="playlist-vendor-interop-receipt"></div>
     </section>
   </main>
 </body>

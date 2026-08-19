@@ -22,6 +22,8 @@ fn main() {
             "playlist_export_m3u8",
             "playlist_evidence_preview",
             "playlist_evidence_export_json",
+            "playlist_vendor_interop_preview",
+            "playlist_vendor_interop_export_rekordbox",
         ]),
     ))
     .expect("failed to configure APPLAYLIST desktop host build");
