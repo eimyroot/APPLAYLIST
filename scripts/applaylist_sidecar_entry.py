@@ -1,4 +1,7 @@
 from services.desktop.playlist_editor_sidecar import install_playlist_editor_sidecar
+from services.desktop.playlist_evidence_export_sidecar import (
+    install_playlist_evidence_export_sidecar,
+)
 from services.desktop.playlist_export_sidecar import install_playlist_export_sidecar
 from services.desktop.set_proposal_sidecar import install_set_proposal_sidecar
 from services.desktop.sidecar import main
@@ -7,6 +10,7 @@ from services.desktop.sidecar import main
 install_set_proposal_sidecar()
 install_playlist_editor_sidecar()
 install_playlist_export_sidecar()
+install_playlist_evidence_export_sidecar()
 
 
 if __name__ == "__main__":

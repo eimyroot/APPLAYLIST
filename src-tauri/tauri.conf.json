@@ -22,7 +22,8 @@
         "main-library-root",
         "main-set-proposal",
         "main-playlist-editor",
-        "main-playlist-export"
+        "main-playlist-export",
+        "main-playlist-evidence-export"
       ]
     },
     "withGlobalTauri": true
