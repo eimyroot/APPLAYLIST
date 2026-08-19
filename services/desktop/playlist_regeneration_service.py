@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Sequence
 
+from data.repositories.analysis_evidence_repository import AnalysisEvidenceRepository
 from data.repositories.playlist_revision_repository import (
     PlaylistRevisionRepository,
     PlaylistRevisionRepositoryError,
@@ -27,9 +30,11 @@ class DesktopPlaylistRegenerationService:
         *,
         generator: DesktopPlaylistRegenerationTransport | None = None,
         revision_repository: PlaylistRevisionRepository | None = None,
+        evidence_repository: AnalysisEvidenceRepository | None = None,
     ) -> None:
         self._generator = generator or DesktopPlaylistRegenerationTransport()
         self._revisions = revision_repository or PlaylistRevisionRepository()
+        self._evidence = evidence_repository or AnalysisEvidenceRepository()
 
     def preview(
         self,
@@ -39,12 +44,13 @@ class DesktopPlaylistRegenerationService:
     ) -> dict[str, object]:
         parent = self._required_current(revision_id)
         try:
-            return self._generator.generate(
+            preview = self._generator.generate(
                 parent_revision=parent,
                 candidate_track_ids=candidate_track_ids,
             )
         except DesktopPlaylistRegenerationTransportError as exc:
             raise DesktopPlaylistRegenerationServiceError(exc.code, exc.message) from exc
+        return self._bind_evidence_identity(preview, candidate_track_ids)
 
     def apply(
         self,
@@ -62,6 +68,7 @@ class DesktopPlaylistRegenerationService:
                 parent_revision=parent,
                 candidate_track_ids=candidate_track_ids,
             )
+            preview = self._bind_evidence_identity(preview, candidate_track_ids)
         except DesktopPlaylistRegenerationTransportError as exc:
             raise DesktopPlaylistRegenerationServiceError(
                 "playlist_regeneration_stale",
@@ -154,6 +161,49 @@ class DesktopPlaylistRegenerationService:
         except PlaylistRevisionRepositoryError as exc:
             raise self._repository_error(exc) from exc
         return self._revision_dto(revision)
+
+    def _bind_evidence_identity(
+        self,
+        preview: dict[str, object],
+        candidate_track_ids: Sequence[str],
+    ) -> dict[str, object]:
+        base_regeneration_id = preview.get("regeneration_id")
+        if not isinstance(base_regeneration_id, str):
+            raise DesktopPlaylistRegenerationServiceError(
+                "playlist_regeneration_stale",
+                "The regeneration preview identity is unavailable.",
+            )
+        evidence_state: list[dict[str, object]] = []
+        for raw_track_id in candidate_track_ids:
+            track_id = self._token(raw_track_id, "track_id")
+            attempt = self._evidence.latest_evidence_for_track(track_id)
+            success = self._evidence.latest_success_for_track(track_id)
+            correction = (
+                None
+                if success is None
+                else self._evidence.latest_active_correction(track_id, success.evidence_id)
+            )
+            evidence_state.append(
+                {
+                    "track_id": track_id,
+                    "latest_attempt_id": None if attempt is None else attempt.evidence_id,
+                    "latest_attempt_status": None if attempt is None else attempt.status,
+                    "latest_success_id": None if success is None else success.evidence_id,
+                    "active_correction_id": (
+                        None if correction is None else correction.correction_id
+                    ),
+                }
+            )
+        material = {
+            "base_regeneration_id": base_regeneration_id,
+            "candidate_evidence_state": evidence_state,
+        }
+        digest = hashlib.sha256(
+            json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        bound = dict(preview)
+        bound["regeneration_id"] = f"rgn_{digest[:32]}"
+        return bound
 
     def _required_current(self, revision_id: str) -> dict[str, object]:
         normalized = self._token(revision_id, "revision_id")
