@@ -37,6 +37,7 @@ def test_transition_inspector_renderer_is_external_dom_safe_and_read_only() -> N
     assert ".textContent" in js
     assert ".innerHTML" not in js
     assert "insertAdjacentHTML" not in js
+    assert '["payload_json", "content_utf8", "source_path", "target_path", "filesystem_path"].includes(key)' in js
 
     for forbidden in (
         "fetch(",
@@ -51,10 +52,6 @@ def test_transition_inspector_renderer_is_external_dom_safe_and_read_only() -> N
         "X-APPLAYLIST-Sidecar-Secret",
         "X-APPLAYLIST-Readiness-Nonce",
         "127.0.0.1",
-        "payload_json",
-        "content_utf8",
-        "source_path",
-        "target_path",
     ):
         assert forbidden not in js
 
