@@ -447,8 +447,7 @@ fn request_json(
         .and_then(|_| stream.flush())
         .map_err(|_| EvidenceExportError::request_failed())?;
     let mut response = Vec::new();
-    stream
-        .by_ref()
+    std::io::Read::by_ref(&mut stream)
         .take(MAX_HTTP_RESPONSE_BYTES + 1)
         .read_to_end(&mut response)
         .map_err(|_| EvidenceExportError::request_failed())?;
