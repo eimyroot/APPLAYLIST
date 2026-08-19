@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="./playlist-editor.css">
   <script src="./app.js" defer></script>
   <script src="./playlist-export.js" defer></script>
+  <script src="./playlist-evidence-export.js" defer></script>
   <script src="./playlist-editor.js" defer></script>
   <script src="./set-proposal.js" defer></script>
 </head>
@@ -175,6 +176,20 @@
       <p id="playlist-export-status" class="status">Accept a Set Proposal revision to enable export.</p>
       <div id="playlist-export-preview-result"></div>
       <div id="playlist-export-receipt"></div>
+    </section>
+
+    <section id="playlist-evidence-export" aria-labelledby="playlist-evidence-export-heading">
+      <h2 id="playlist-evidence-export-heading">JSON Evidence Export</h2>
+      <p>Export a machine-readable evidence companion for one exact immutable revision. The preview verifies current M3U8 path validity without exposing filesystem paths.</p>
+      <div class="actions">
+        <label for="playlist-evidence-revision">Revision</label>
+        <select id="playlist-evidence-revision" disabled></select>
+        <button id="playlist-evidence-preview" type="button" disabled>Preview evidence</button>
+        <button id="playlist-evidence-write" type="button" disabled>Export JSON evidence…</button>
+      </div>
+      <p id="playlist-evidence-status" class="status">Accept a Set Proposal revision to enable evidence export.</p>
+      <div id="playlist-evidence-preview-result"></div>
+      <div id="playlist-evidence-receipt"></div>
     </section>
   </main>
 </body>
