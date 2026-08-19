@@ -24,7 +24,8 @@
         "main-playlist-editor",
         "main-playlist-export",
         "main-playlist-evidence-export",
-        "main-playlist-vendor-interop"
+        "main-playlist-vendor-interop",
+        "main-transition-inspector"
       ]
     },
     "withGlobalTauri": true

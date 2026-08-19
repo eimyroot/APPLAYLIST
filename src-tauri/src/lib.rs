@@ -8,6 +8,7 @@ mod playlist_export;
 mod playlist_vendor_interop;
 mod set_proposal;
 mod sidecar_bridge;
+mod transition_inspector;
 
 use analysis_bridge::AnalysisSidecarBridge;
 use analysis_job::AnalysisJobRegistry;
@@ -19,6 +20,7 @@ use playlist_export::PlaylistExportBridge;
 use playlist_vendor_interop::PlaylistVendorInteropBridge;
 use set_proposal::SetProposalBridge;
 use sidecar_bridge::SidecarBridge;
+use transition_inspector::TransitionInspectorBridge;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,6 +36,7 @@ pub fn run() {
         .manage(PlaylistExportBridge::from_environment())
         .manage(PlaylistEvidenceExportBridge::from_environment())
         .manage(PlaylistVendorInteropBridge::from_environment())
+        .manage(TransitionInspectorBridge::from_environment())
         .invoke_handler(tauri::generate_handler![
             library_capability::library_choose_root,
             import_job::library_import_start,
@@ -57,7 +60,8 @@ pub fn run() {
             playlist_evidence_export::playlist_evidence_preview,
             playlist_evidence_export::playlist_evidence_export_json,
             playlist_vendor_interop::playlist_vendor_interop_preview,
-            playlist_vendor_interop::playlist_vendor_interop_export_rekordbox
+            playlist_vendor_interop::playlist_vendor_interop_export_rekordbox,
+            transition_inspector::playlist_transition_inspect
         ])
         .run(tauri::generate_context!())
         .expect("error while running APPLAYLIST desktop host");

@@ -89,6 +89,7 @@ def test_set_proposal_tauri_surface_is_separate_and_narrow() -> None:
         "main-playlist-export",
         "main-playlist-evidence-export",
         "main-playlist-vendor-interop",
+        "main-transition-inspector",
     }
 
     assert "#[serde(deny_unknown_fields)]" in rust
