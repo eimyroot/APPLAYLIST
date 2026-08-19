@@ -3,6 +3,7 @@ mod analysis_job;
 mod import_job;
 mod library_capability;
 mod playlist_editor;
+mod playlist_export;
 mod set_proposal;
 mod sidecar_bridge;
 
@@ -11,6 +12,7 @@ use analysis_job::AnalysisJobRegistry;
 use import_job::ImportJobRegistry;
 use library_capability::LibraryCapabilityRegistry;
 use playlist_editor::PlaylistEditorBridge;
+use playlist_export::PlaylistExportBridge;
 use set_proposal::SetProposalBridge;
 use sidecar_bridge::SidecarBridge;
 
@@ -25,6 +27,7 @@ pub fn run() {
         .manage(AnalysisSidecarBridge::from_environment())
         .manage(SetProposalBridge::from_environment())
         .manage(PlaylistEditorBridge::from_environment())
+        .manage(PlaylistExportBridge::from_environment())
         .invoke_handler(tauri::generate_handler![
             library_capability::library_choose_root,
             import_job::library_import_start,
@@ -42,7 +45,9 @@ pub fn run() {
             playlist_editor::playlist_editor_reorder,
             playlist_editor::playlist_editor_lock,
             playlist_editor::playlist_editor_replace,
-            playlist_editor::playlist_editor_history
+            playlist_editor::playlist_editor_history,
+            playlist_export::playlist_export_preview,
+            playlist_export::playlist_export_m3u8
         ])
         .run(tauri::generate_context!())
         .expect("error while running APPLAYLIST desktop host");
