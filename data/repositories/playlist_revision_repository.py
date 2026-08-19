@@ -8,7 +8,7 @@ from data.connection import get_sqlite_connection
 
 _MAX_ITEMS = 8
 _MAX_HISTORY = 100
-_OPERATIONS = {"accept", "reorder", "lock", "replace"}
+_OPERATIONS = {"accept", "reorder", "lock", "replace", "regenerate"}
 
 
 class PlaylistRevisionRepositoryError(ValueError):
@@ -24,42 +24,118 @@ class PlaylistRevisionRepository:
     def ensure_schema(self) -> None:
         with get_sqlite_connection() as conn:
             conn.execute("PRAGMA foreign_keys = ON")
-            conn.executescript(
+            self._create_schema(conn)
+            row = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='playlist_revisions'"
+            ).fetchone()
+            table_sql = "" if row is None else str(row["sql"] or "")
+            if "regenerate" not in table_sql:
+                conn.commit()
+                self._migrate_revision_operations(conn)
+            conn.commit()
+
+    @staticmethod
+    def _create_schema(conn: object) -> None:
+        conn.executescript(  # type: ignore[attr-defined]
+            """
+            CREATE TABLE IF NOT EXISTS playlist_revisions (
+                revision_id TEXT PRIMARY KEY,
+                playlist_id TEXT NOT NULL,
+                parent_revision_id TEXT,
+                revision_index INTEGER NOT NULL CHECK (revision_index >= 0),
+                source_proposal_id TEXT NOT NULL,
+                source_path_id TEXT NOT NULL,
+                operation TEXT NOT NULL CHECK (operation IN ('accept','reorder','lock','replace','regenerate')),
+                operation_json TEXT NOT NULL,
+                content_fingerprint TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                personal_dj_model_training_authorized INTEGER NOT NULL DEFAULT 0 CHECK (personal_dj_model_training_authorized = 0),
+                production_activation_authorized INTEGER NOT NULL DEFAULT 0 CHECK (production_activation_authorized = 0),
+                UNIQUE (playlist_id, revision_index),
+                FOREIGN KEY(parent_revision_id) REFERENCES playlist_revisions(revision_id)
+            );
+            CREATE TABLE IF NOT EXISTS playlist_revision_items (
+                revision_id TEXT NOT NULL,
+                order_index INTEGER NOT NULL CHECK (order_index >= 0),
+                track_id TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                locked INTEGER NOT NULL DEFAULT 0 CHECK (locked IN (0,1)),
+                PRIMARY KEY (revision_id, order_index),
+                UNIQUE (revision_id, track_id),
+                FOREIGN KEY(revision_id) REFERENCES playlist_revisions(revision_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_playlist_revision_head ON playlist_revisions(playlist_id, revision_index);
+            CREATE TRIGGER IF NOT EXISTS playlist_revisions_no_update BEFORE UPDATE ON playlist_revisions BEGIN SELECT RAISE(ABORT, 'playlist revisions are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS playlist_revisions_no_delete BEFORE DELETE ON playlist_revisions BEGIN SELECT RAISE(ABORT, 'playlist revisions are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS playlist_revision_items_no_update BEFORE UPDATE ON playlist_revision_items BEGIN SELECT RAISE(ABORT, 'playlist revision items are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS playlist_revision_items_no_delete BEFORE DELETE ON playlist_revision_items BEGIN SELECT RAISE(ABORT, 'playlist revision items are immutable'); END;
+            """
+        )
+
+    @staticmethod
+    def _migrate_revision_operations(conn: object) -> None:
+        conn.execute("PRAGMA foreign_keys = OFF")  # type: ignore[attr-defined]
+        try:
+            conn.execute("BEGIN IMMEDIATE")  # type: ignore[attr-defined]
+            conn.execute("DROP TRIGGER IF EXISTS playlist_revisions_no_update")  # type: ignore[attr-defined]
+            conn.execute("DROP TRIGGER IF EXISTS playlist_revisions_no_delete")  # type: ignore[attr-defined]
+            conn.execute("DROP TABLE IF EXISTS playlist_revisions_next")  # type: ignore[attr-defined]
+            conn.execute(  # type: ignore[attr-defined]
                 """
-                CREATE TABLE IF NOT EXISTS playlist_revisions (
+                CREATE TABLE playlist_revisions_next (
                     revision_id TEXT PRIMARY KEY,
                     playlist_id TEXT NOT NULL,
                     parent_revision_id TEXT,
                     revision_index INTEGER NOT NULL CHECK (revision_index >= 0),
                     source_proposal_id TEXT NOT NULL,
                     source_path_id TEXT NOT NULL,
-                    operation TEXT NOT NULL CHECK (operation IN ('accept','reorder','lock','replace')),
+                    operation TEXT NOT NULL CHECK (operation IN ('accept','reorder','lock','replace','regenerate')),
                     operation_json TEXT NOT NULL,
                     content_fingerprint TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     personal_dj_model_training_authorized INTEGER NOT NULL DEFAULT 0 CHECK (personal_dj_model_training_authorized = 0),
                     production_activation_authorized INTEGER NOT NULL DEFAULT 0 CHECK (production_activation_authorized = 0),
                     UNIQUE (playlist_id, revision_index),
-                    FOREIGN KEY(parent_revision_id) REFERENCES playlist_revisions(revision_id)
-                );
-                CREATE TABLE IF NOT EXISTS playlist_revision_items (
-                    revision_id TEXT NOT NULL,
-                    order_index INTEGER NOT NULL CHECK (order_index >= 0),
-                    track_id TEXT NOT NULL,
-                    display_name TEXT NOT NULL,
-                    locked INTEGER NOT NULL DEFAULT 0 CHECK (locked IN (0,1)),
-                    PRIMARY KEY (revision_id, order_index),
-                    UNIQUE (revision_id, track_id),
-                    FOREIGN KEY(revision_id) REFERENCES playlist_revisions(revision_id)
-                );
-                CREATE INDEX IF NOT EXISTS idx_playlist_revision_head ON playlist_revisions(playlist_id, revision_index);
-                CREATE TRIGGER IF NOT EXISTS playlist_revisions_no_update BEFORE UPDATE ON playlist_revisions BEGIN SELECT RAISE(ABORT, 'playlist revisions are immutable'); END;
-                CREATE TRIGGER IF NOT EXISTS playlist_revisions_no_delete BEFORE DELETE ON playlist_revisions BEGIN SELECT RAISE(ABORT, 'playlist revisions are immutable'); END;
-                CREATE TRIGGER IF NOT EXISTS playlist_revision_items_no_update BEFORE UPDATE ON playlist_revision_items BEGIN SELECT RAISE(ABORT, 'playlist revision items are immutable'); END;
-                CREATE TRIGGER IF NOT EXISTS playlist_revision_items_no_delete BEFORE DELETE ON playlist_revision_items BEGIN SELECT RAISE(ABORT, 'playlist revision items are immutable'); END;
+                    FOREIGN KEY(parent_revision_id) REFERENCES playlist_revisions_next(revision_id)
+                )
                 """
             )
-            conn.commit()
+            conn.execute(  # type: ignore[attr-defined]
+                """
+                INSERT INTO playlist_revisions_next (
+                    revision_id, playlist_id, parent_revision_id, revision_index,
+                    source_proposal_id, source_path_id, operation, operation_json,
+                    content_fingerprint, created_at,
+                    personal_dj_model_training_authorized, production_activation_authorized
+                )
+                SELECT
+                    revision_id, playlist_id, parent_revision_id, revision_index,
+                    source_proposal_id, source_path_id, operation, operation_json,
+                    content_fingerprint, created_at,
+                    personal_dj_model_training_authorized, production_activation_authorized
+                FROM playlist_revisions
+                """
+            )
+            conn.execute("DROP TABLE playlist_revisions")  # type: ignore[attr-defined]
+            conn.execute("ALTER TABLE playlist_revisions_next RENAME TO playlist_revisions")  # type: ignore[attr-defined]
+            conn.execute(  # type: ignore[attr-defined]
+                "CREATE INDEX IF NOT EXISTS idx_playlist_revision_head ON playlist_revisions(playlist_id, revision_index)"
+            )
+            conn.execute(  # type: ignore[attr-defined]
+                "CREATE TRIGGER IF NOT EXISTS playlist_revisions_no_update BEFORE UPDATE ON playlist_revisions BEGIN SELECT RAISE(ABORT, 'playlist revisions are immutable'); END"
+            )
+            conn.execute(  # type: ignore[attr-defined]
+                "CREATE TRIGGER IF NOT EXISTS playlist_revisions_no_delete BEFORE DELETE ON playlist_revisions BEGIN SELECT RAISE(ABORT, 'playlist revisions are immutable'); END"
+            )
+            conn.commit()  # type: ignore[attr-defined]
+        except Exception:
+            conn.rollback()  # type: ignore[attr-defined]
+            raise
+        finally:
+            conn.execute("PRAGMA foreign_keys = ON")  # type: ignore[attr-defined]
+        violation = conn.execute("PRAGMA foreign_key_check").fetchone()  # type: ignore[attr-defined]
+        if violation is not None:
+            raise RuntimeError("playlist revision schema migration failed foreign-key verification")
 
     def append_root(
         self,
