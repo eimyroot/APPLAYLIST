@@ -18,6 +18,8 @@ fn main() {
             "playlist_editor_lock",
             "playlist_editor_replace",
             "playlist_editor_history",
+            "playlist_editor_regeneration_preview",
+            "playlist_editor_regeneration_apply",
             "playlist_export_preview",
             "playlist_export_m3u8",
             "playlist_evidence_preview",
