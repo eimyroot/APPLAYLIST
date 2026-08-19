@@ -23,7 +23,7 @@
   }
 
   const TOKEN = /^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,255}$/;
-  const OPERATIONS = new Set(["accept", "reorder", "lock", "replace"]);
+  const OPERATIONS = new Set(["accept", "reorder", "lock", "replace", "regenerate"]);
   let trustedHistory = null;
   let busy = false;
 

@@ -14,10 +14,12 @@
   }
 
   const TOKEN = /^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,255}$/;
-  const OPERATIONS = new Set(["accept", "reorder", "lock", "replace"]);
+  const OPERATIONS = new Set(["accept", "reorder", "lock", "replace", "regenerate"]);
   let lastProposal = null;
   let activeRevision = null;
   let replacementTracks = new Map();
+  let regenerationPreview = null;
+  let regenerationCandidateIds = [];
   let busy = false;
 
   function exactKeys(value, keys) {
@@ -186,6 +188,100 @@
     );
   }
 
+  function validRegenerationPreview(value, revisionId, candidateIds) {
+    if (
+      !exactKeys(value, [
+        "schema",
+        "playlist_id",
+        "parent_revision_id",
+        "regeneration_id",
+        "candidate_pool_count",
+        "candidate_pool_sha256",
+        "locked_positions",
+        "alternatives",
+        "reason_codes",
+        "warning_codes",
+        "budget_exhausted",
+        "missing_evidence_detected",
+        "deterministic_ordering",
+        "playlist_mutation_authorized",
+        "personal_dj_model_training_authorized",
+        "production_activation_authorized",
+      ]) ||
+      value.schema !== "applaylist-desktop-playlist-regeneration-r1" ||
+      !validToken(value.playlist_id) ||
+      value.parent_revision_id !== revisionId ||
+      !validToken(value.regeneration_id) ||
+      value.candidate_pool_count !== candidateIds.length ||
+      !/^[0-9a-f]{64}$/.test(value.candidate_pool_sha256) ||
+      !Array.isArray(value.locked_positions) ||
+      value.locked_positions.length < 1 ||
+      value.locked_positions.length > 8 ||
+      !Array.isArray(value.alternatives) ||
+      value.alternatives.length > 3 ||
+      !Array.isArray(value.reason_codes) ||
+      !value.reason_codes.every(validToken) ||
+      !Array.isArray(value.warning_codes) ||
+      !value.warning_codes.every(validToken) ||
+      typeof value.budget_exhausted !== "boolean" ||
+      typeof value.missing_evidence_detected !== "boolean" ||
+      value.deterministic_ordering !== true ||
+      value.playlist_mutation_authorized !== false ||
+      value.personal_dj_model_training_authorized !== false ||
+      value.production_activation_authorized !== false
+    ) {
+      return false;
+    }
+    const expectedLocks = activeRevision.sequence
+      .filter((item) => item.locked)
+      .map((item) => ({ order_index: item.order_index, track_id: item.track_id }));
+    if (
+      expectedLocks.length !== value.locked_positions.length ||
+      expectedLocks.some((lock, index) =>
+        !exactKeys(value.locked_positions[index], ["order_index", "track_id"]) ||
+        value.locked_positions[index].order_index !== lock.order_index ||
+        value.locked_positions[index].track_id !== lock.track_id,
+      )
+    ) {
+      return false;
+    }
+    return value.alternatives.every((alternative, alternativeIndex) => {
+      if (
+        !exactKeys(alternative, ["path_id", "rank", "sequence", "objective", "explanation_codes"]) ||
+        !validToken(alternative.path_id) ||
+        alternative.rank !== alternativeIndex + 1 ||
+        !Array.isArray(alternative.sequence) ||
+        alternative.sequence.length !== activeRevision.sequence.length ||
+        !Array.isArray(alternative.explanation_codes) ||
+        !alternative.explanation_codes.every(validToken) ||
+        !exactKeys(alternative.objective, [
+          "depth",
+          "mean_candidate_score",
+          "minimum_candidate_score",
+          "required_track_completion",
+          "remaining_required_count",
+          "target_reached",
+        ])
+      ) {
+        return false;
+      }
+      const ids = new Set();
+      return alternative.sequence.every((step, index) => {
+        const locked = activeRevision.sequence[index].locked;
+        return (
+          exactKeys(step, ["order_index", "track_id", "display_name", "locked"]) &&
+          step.order_index === index &&
+          validToken(step.track_id) &&
+          validDisplayName(step.display_name) &&
+          step.locked === locked &&
+          (!locked || step.track_id === activeRevision.sequence[index].track_id) &&
+          !ids.has(step.track_id) &&
+          ids.add(step.track_id)
+        );
+      });
+    });
+  }
+
   function setStatus(message) {
     status.textContent = message;
   }
@@ -210,6 +306,14 @@
     const result = await originalInvoke(command, args);
     if (validProposalContext(command, args, result)) {
       captureProposal(args, result);
+    }
+    if (command === "playlist_editor_regeneration_apply" && validRevision(result)) {
+      activeRevision = result;
+      regenerationPreview = null;
+      regenerationCandidateIds = [];
+      await refreshReplacementTracks();
+      await refreshHistory();
+      setStatus("Regeneration appended as a new immutable revision.");
     }
     return result;
   }
@@ -397,6 +501,186 @@
       list.appendChild(item);
     }
     current.appendChild(list);
+    renderRegenerationControls();
+  }
+
+  function renderRegenerationControls() {
+    if (!activeRevision) return;
+    const panel = document.createElement("section");
+    panel.className = "editor-regeneration";
+    const heading = document.createElement("h4");
+    heading.textContent = "Regenerate around locks";
+    const explanation = document.createElement("p");
+    explanation.textContent =
+      "R1 preserves locked positions exactly and regenerates only unlocked positions from an explicit analyzed-track pool. Position 1 must be locked.";
+    panel.append(heading, explanation);
+
+    const firstLocked = activeRevision.sequence[0]?.locked === true;
+    if (!firstLocked) {
+      const blocker = document.createElement("p");
+      blocker.className = "empty-state";
+      blocker.textContent = "Lock the first playlist track before regeneration R1 can run.";
+      panel.appendChild(blocker);
+      current.appendChild(panel);
+      return;
+    }
+
+    const currentIds = new Set(activeRevision.sequence.map((item) => item.track_id));
+    const lockedIds = new Set(activeRevision.sequence.filter((item) => item.locked).map((item) => item.track_id));
+    const candidates = new Map(activeRevision.sequence.map((item) => [item.track_id, item.display_name]));
+    for (const [trackId, label] of replacementTracks.entries()) {
+      candidates.set(trackId, label);
+    }
+
+    const list = document.createElement("div");
+    list.className = "regeneration-candidate-list";
+    for (const [trackId, label] of [...candidates.entries()].sort((a, b) => a[1].localeCompare(b[1]))) {
+      const row = document.createElement("label");
+      row.className = "regeneration-candidate";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = trackId;
+      checkbox.checked = currentIds.has(trackId);
+      checkbox.disabled = lockedIds.has(trackId) || busy;
+      if (lockedIds.has(trackId)) checkbox.checked = true;
+      checkbox.addEventListener("change", () => {
+        regenerationPreview = null;
+        regenerationCandidateIds = [];
+        renderRegenerationResults(results);
+      });
+      row.append(checkbox, document.createTextNode(` ${label}${lockedIds.has(trackId) ? " · locked" : ""}`));
+      list.appendChild(row);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const preview = document.createElement("button");
+    preview.type = "button";
+    preview.textContent = "Preview regeneration";
+    preview.disabled = busy || candidates.size < 3;
+    const selectedCount = document.createElement("span");
+    selectedCount.textContent = "Explicit candidate pool: current members selected; add analyzed alternatives if desired.";
+    actions.append(preview, selectedCount);
+
+    const results = document.createElement("div");
+    results.className = "regeneration-results";
+    preview.addEventListener("click", () => previewRegeneration(list, results));
+    panel.append(list, actions, results);
+    current.appendChild(panel);
+    renderRegenerationResults(results);
+  }
+
+  function selectedRegenerationCandidates(list) {
+    const values = [...list.querySelectorAll("input[type='checkbox']")]
+      .filter((input) => input.checked)
+      .map((input) => input.value);
+    return values.length >= 3 && values.length <= 24 && values.every(validToken) && new Set(values).size === values.length
+      ? values
+      : null;
+  }
+
+  async function previewRegeneration(list, results) {
+    if (busy || !activeRevision) return;
+    const candidateIds = selectedRegenerationCandidates(list);
+    if (!candidateIds) {
+      setStatus("Regeneration requires 3–24 unique analyzed candidate tracks.");
+      return;
+    }
+    const lockedIds = activeRevision.sequence.filter((item) => item.locked).map((item) => item.track_id);
+    if (lockedIds.some((trackId) => !candidateIds.includes(trackId))) {
+      setStatus("Every locked track must remain inside the regeneration candidate pool.");
+      return;
+    }
+    busy = true;
+    setStatus("Computing bounded regeneration preview from current evidence…");
+    try {
+      const response = await originalInvoke("playlist_editor_regeneration_preview", {
+        revisionId: activeRevision.revision_id,
+        candidateTrackIds: candidateIds,
+      });
+      if (!validRegenerationPreview(response, activeRevision.revision_id, candidateIds)) {
+        throw new Error("Invalid regeneration preview response.");
+      }
+      regenerationPreview = response;
+      regenerationCandidateIds = [...candidateIds];
+      renderRegenerationResults(results);
+      setStatus(
+        response.alternatives.length > 0
+          ? "Regeneration preview ready. Choose one path to append as a new immutable revision."
+          : "No bounded regeneration path satisfies the current locks and evidence.",
+      );
+    } catch (_error) {
+      regenerationPreview = null;
+      regenerationCandidateIds = [];
+      results.replaceChildren();
+      setStatus("Regeneration preview was rejected safely.");
+    } finally {
+      busy = false;
+    }
+  }
+
+  function renderRegenerationResults(results) {
+    results.replaceChildren();
+    if (!regenerationPreview || !activeRevision) return;
+    const heading = document.createElement("h5");
+    heading.textContent = `Regeneration ${regenerationPreview.regeneration_id}`;
+    results.appendChild(heading);
+    for (const alternative of regenerationPreview.alternatives) {
+      const card = document.createElement("article");
+      card.className = "editor-proposal-choice";
+      const title = document.createElement("h5");
+      title.textContent = `Regenerated alternative ${alternative.rank}`;
+      const sequence = document.createElement("ol");
+      for (const step of alternative.sequence) {
+        const row = document.createElement("li");
+        row.textContent = `${step.display_name}${step.locked ? " · locked" : ""}`;
+        sequence.appendChild(row);
+      }
+      const apply = document.createElement("button");
+      apply.type = "button";
+      apply.textContent = "Apply as new revision";
+      apply.disabled = busy;
+      apply.addEventListener("click", () => applyRegeneration(alternative.path_id));
+      card.append(title, sequence, apply);
+      results.appendChild(card);
+    }
+  }
+
+  async function applyRegeneration(pathId) {
+    if (
+      busy ||
+      !activeRevision ||
+      !regenerationPreview ||
+      !validToken(pathId) ||
+      regenerationCandidateIds.length < 3
+    ) {
+      return;
+    }
+    busy = true;
+    setStatus("Replaying regeneration evidence and appending immutable child revision…");
+    try {
+      const revision = await tauriCore.invoke("playlist_editor_regeneration_apply", {
+        revisionId: activeRevision.revision_id,
+        candidateTrackIds: regenerationCandidateIds,
+        regenerationId: regenerationPreview.regeneration_id,
+        pathId,
+      });
+      if (!validRevision(revision) || revision.operation !== "regenerate") {
+        throw new Error("Invalid regenerated revision response.");
+      }
+    } catch (_error) {
+      regenerationPreview = null;
+      regenerationCandidateIds = [];
+      setStatus("Regeneration apply was rejected safely. Preview again from the current revision.");
+      try {
+        await refreshHistory();
+      } catch (_ignored) {
+        // Keep the last trusted view if authoritative history is temporarily unavailable.
+      }
+    } finally {
+      busy = false;
+      renderCurrentRevision();
+    }
   }
 
   async function moveTrack(from, to) {
@@ -447,6 +731,8 @@
       return;
     }
     busy = true;
+    regenerationPreview = null;
+    regenerationCandidateIds = [];
     setStatus("Appending governed playlist revision…");
     try {
       const revision = await originalInvoke(command, args);

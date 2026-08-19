@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-playlist-regeneration",
+  "description": "Allow the local main window to preview and explicitly apply governed regeneration around immutable playlist locks.",
+  "local": true,
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "permissions": [
+    "core:default",
+    "allow-playlist-editor-regeneration-preview",
+    "allow-playlist-editor-regeneration-apply"
+  ]
+}
