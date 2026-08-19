@@ -11,6 +11,7 @@
   <script src="./playlist-export.js" defer></script>
   <script src="./playlist-evidence-export.js" defer></script>
   <script src="./playlist-vendor-interop.js" defer></script>
+  <script src="./transition-inspector.js" defer></script>
   <script src="./playlist-editor.js" defer></script>
   <script src="./set-proposal.js" defer></script>
 </head>
@@ -163,6 +164,20 @@
       <div id="playlist-editor-source"></div>
       <div id="playlist-editor-current"></div>
       <div id="playlist-editor-history"></div>
+    </section>
+
+    <section id="transition-inspector" aria-labelledby="transition-inspector-heading">
+      <h2 id="transition-inspector-heading">Selected Transition Inspector</h2>
+      <p>Inspect only already-persisted TransitionAssessment evidence for one adjacent pair in one exact immutable revision. Inspection never recomputes a transition or mutates the playlist.</p>
+      <div class="actions">
+        <label for="transition-inspector-revision">Revision</label>
+        <select id="transition-inspector-revision" disabled></select>
+        <label for="transition-inspector-pair">Adjacent transition</label>
+        <select id="transition-inspector-pair" disabled></select>
+        <button id="transition-inspector-load" type="button" disabled>Inspect persisted transition</button>
+      </div>
+      <p id="transition-inspector-status" class="status">Accept a Set Proposal revision to enable transition inspection.</p>
+      <div id="transition-inspector-result"></div>
     </section>
 
     <section id="playlist-export" aria-labelledby="playlist-export-heading">
