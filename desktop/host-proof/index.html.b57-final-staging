@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APPLAYLIST Desktop</title>
+  <link rel="stylesheet" href="./app.css">
+  <link rel="stylesheet" href="./set-proposal.css">
+  <link rel="stylesheet" href="./playlist-editor.css">
+  <script src="./app.js" defer></script>
+  <script src="./playlist-editor.js" defer></script>
+  <script src="./set-proposal.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>APPLAYLIST</h1>
+    <section id="library-import" aria-labelledby="library-import-heading" aria-busy="false">
+      <h2 id="library-import-heading">Library import</h2>
+      <p>Select a music library folder, then import it through the authorized desktop bridge.</p>
+
+      <div class="actions">
+        <button id="choose-library" type="button">Choose library</button>
+        <button id="import-library" type="button" disabled>Import library</button>
+        <button id="cancel-import" type="button" disabled>Cancel import</button>
+      </div>
+
+      <dl class="selected-library">
+        <dt>Selected library</dt>
+        <dd id="selected-library">None</dd>
+      </dl>
+
+      <p id="status" class="status" role="status" aria-live="polite">Ready.</p>
+
+      <section id="import-progress" aria-labelledby="import-progress-heading" hidden>
+        <h3 id="import-progress-heading">Import progress</h3>
+        <dl class="summary-grid">
+          <dt>Phase</dt><dd id="progress-phase">—</dd>
+          <dt>Discovered</dt><dd id="progress-discovered">0</dd>
+          <dt>Accepted</dt><dd id="progress-accepted">0</dd>
+          <dt>Imported</dt><dd id="progress-imported">0</dd>
+          <dt>Persisted</dt><dd id="progress-persisted">0</dd>
+        </dl>
+      </section>
+
+      <section id="import-summary" aria-labelledby="import-summary-heading" hidden>
+        <h3 id="import-summary-heading">Import summary</h3>
+        <dl class="summary-grid">
+          <dt>Library</dt><dd id="summary-library">—</dd>
+          <dt>Discovered</dt><dd id="summary-discovered">0</dd>
+          <dt>Accepted</dt><dd id="summary-accepted">0</dd>
+          <dt>Imported</dt><dd id="summary-imported">0</dd>
+          <dt>Persisted</dt><dd id="summary-persisted">0</dd>
+          <dt>Issues</dt><dd id="summary-issues">0</dd>
+        </dl>
+      </section>
+
+      <section id="library-results" aria-labelledby="library-results-heading" hidden>
+        <h3 id="library-results-heading">Imported tracks</h3>
+        <p id="library-empty" class="empty-state" hidden>No imported tracks were returned for this folder.</p>
+        <div class="table-wrap">
+          <table id="library-table" hidden>
+            <caption>Imported library tracks</caption>
+            <thead><tr><th scope="col">Analyze</th><th scope="col">Title</th><th scope="col">Artist</th><th scope="col">Format</th><th scope="col">Duration</th><th scope="col">State</th><th scope="col">Metadata</th></tr></thead>
+            <tbody id="library-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="import-issues" aria-labelledby="import-issues-heading" hidden>
+        <h3 id="import-issues-heading">Import issues</h3>
+        <p>Only bounded issue codes and safe file names are shown.</p>
+        <ul id="issue-list"></ul>
+      </section>
+    </section>
+
+    <section id="analysis" aria-labelledby="analysis-heading" aria-busy="false" hidden>
+      <h2 id="analysis-heading">Analysis &amp; Inspector</h2>
+      <p>Analyze selected imported tracks, inspect persisted evidence, apply explicit corrections, or request re-analysis.</p>
+
+      <div class="actions">
+        <button id="analyze-selected" type="button">Analyze selected</button>
+        <button id="cancel-analysis" type="button" disabled>Cancel analysis</button>
+        <button id="refresh-inspector" type="button">Refresh inspector</button>
+        <label for="inspector-filter">Filter</label>
+        <select id="inspector-filter"><option value="all">All</option><option value="uncertain">Uncertain</option><option value="failed">Failed</option><option value="corrected">Corrected</option></select>
+      </div>
+
+      <p id="analysis-status" class="status" role="status" aria-live="polite">Select imported tracks to analyze.</p>
+
+      <section id="analysis-progress" aria-labelledby="analysis-progress-heading" hidden>
+        <h3 id="analysis-progress-heading">Analysis progress</h3>
+        <dl class="summary-grid">
+          <dt>State</dt><dd id="analysis-progress-state">—</dd>
+          <dt>Selected</dt><dd id="analysis-progress-selected">0</dd>
+          <dt>Completed</dt><dd id="analysis-progress-completed">0</dd>
+          <dt>Succeeded</dt><dd id="analysis-progress-succeeded">0</dd>
+          <dt>Failed</dt><dd id="analysis-progress-failed">0</dd>
+          <dt>Uncertain</dt><dd id="analysis-progress-uncertain">0</dd>
+        </dl>
+      </section>
+
+      <section id="analysis-inspector" aria-labelledby="analysis-inspector-heading">
+        <h3 id="analysis-inspector-heading">Inspector</h3>
+        <p id="inspector-empty" class="empty-state">No analysis evidence yet.</p>
+        <div class="table-wrap">
+          <table id="inspector-table" hidden>
+            <caption>Persisted analysis evidence</caption>
+            <thead><tr><th scope="col">Title</th><th scope="col">Artist</th><th scope="col">Status</th><th scope="col">BPM</th><th scope="col">Key</th><th scope="col">Energy</th><th scope="col">Source</th><th scope="col">Action</th></tr></thead>
+            <tbody id="inspector-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="analysis-detail" aria-labelledby="analysis-detail-heading" hidden>
+        <h3 id="analysis-detail-heading">Analysis detail</h3>
+        <dl class="summary-grid">
+          <dt>Track</dt><dd id="detail-track">—</dd>
+          <dt>Provider</dt><dd id="detail-provider">—</dd>
+          <dt>BPM confidence</dt><dd id="detail-bpm-confidence">—</dd>
+          <dt>Key confidence</dt><dd id="detail-key-confidence">—</dd>
+          <dt>Evidence</dt><dd id="detail-evidence">—</dd>
+          <dt>Error</dt><dd id="detail-error">—</dd>
+        </dl>
+        <div><h4>Warnings</h4><ul id="detail-warnings"></ul></div>
+
+        <form id="correction-form">
+          <h4>Manual correction</h4>
+          <div class="form-grid">
+            <label>BPM <input id="correction-bpm" inputmode="decimal" type="number" min="20" max="300" step="0.01"></label>
+            <label>Key tonic <input id="correction-key-tonic" maxlength="32"></label>
+            <label>Key scale <input id="correction-key-scale" maxlength="32"></label>
+            <label>Camelot <input id="correction-camelot" maxlength="32"></label>
+            <label>Energy <input id="correction-energy" inputmode="decimal" type="number" min="0" max="1" step="0.01"></label>
+            <label>Reason <input id="correction-reason" maxlength="512"></label>
+          </div>
+          <div class="actions"><button id="apply-correction" type="submit">Apply correction</button><button id="reanalyze-track" type="button">Re-analyze track</button></div>
+        </form>
+      </section>
+    </section>
+
+    <section id="set-proposal" aria-labelledby="set-proposal-heading">
+      <h2 id="set-proposal-heading">Set Proposal Inspector</h2>
+      <p>Build a read-only, explainable set proposal from already-persisted analysis evidence. This does not activate optimization or train the Personal DJ Model.</p>
+      <div class="actions">
+        <button id="set-proposal-refresh" type="button">Refresh analyzed tracks</button>
+        <label for="set-proposal-seed">Seed track</label><select id="set-proposal-seed" disabled></select>
+        <label for="set-proposal-target">Target tracks</label><input id="set-proposal-target" type="number" min="3" max="8" value="3" step="1" disabled>
+        <button id="set-proposal-generate" type="button" disabled>Generate set proposal</button>
+      </div>
+      <p id="set-proposal-status" class="status">Load analyzed tracks to begin.</p>
+      <p id="set-proposal-empty" class="empty-state">No successful analyzed tracks loaded.</p>
+      <ul id="set-proposal-track-list" class="proposal-track-list"></ul>
+      <div id="set-proposal-results"></div>
+    </section>
+
+    <section id="playlist-editor" aria-labelledby="playlist-editor-heading">
+      <h2 id="playlist-editor-heading">Manual Set Editor</h2>
+      <p>Accept one verified proposal path, then append explicit reorder, lock, or replace revisions. History is immutable; editor actions do not train the Personal DJ Model or activate production optimization.</p>
+      <p id="playlist-editor-status" class="status" role="status" aria-live="polite">Generate a Set Proposal to begin.</p>
+      <div id="playlist-editor-source"></div>
+      <div id="playlist-editor-current"></div>
+      <div id="playlist-editor-history"></div>
+    </section>
+  </main>
+</body>
+</html>
