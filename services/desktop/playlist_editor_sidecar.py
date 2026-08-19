@@ -7,22 +7,50 @@ from services.desktop.playlist_editor_transport import (
     DesktopPlaylistEditorTransport,
     DesktopPlaylistEditorTransportError,
 )
+from services.desktop.playlist_regeneration_service import (
+    DesktopPlaylistRegenerationService,
+    DesktopPlaylistRegenerationServiceError,
+)
 
 MAX_PLAYLIST_EDITOR_REQUEST_BYTES = 64 * 1024
 _INSTALLED = False
 
 _ROUTES = {
     "/v1/playlist/editor/accept": (
+        "playlist_editor",
         "accept",
         {"track_ids", "seed_track_id", "target_track_count", "proposal_id", "path_id"},
     ),
-    "/v1/playlist/editor/reorder": ("reorder", {"revision_id", "ordered_track_ids"}),
-    "/v1/playlist/editor/lock": ("lock", {"revision_id", "locked_track_ids"}),
+    "/v1/playlist/editor/reorder": (
+        "playlist_editor",
+        "reorder",
+        {"revision_id", "ordered_track_ids"},
+    ),
+    "/v1/playlist/editor/lock": (
+        "playlist_editor",
+        "lock",
+        {"revision_id", "locked_track_ids"},
+    ),
     "/v1/playlist/editor/replace": (
+        "playlist_editor",
         "replace",
         {"revision_id", "source_track_id", "replacement_track_id"},
     ),
-    "/v1/playlist/editor/history": ("history", {"playlist_id"}),
+    "/v1/playlist/editor/history": (
+        "playlist_editor",
+        "history",
+        {"playlist_id"},
+    ),
+    "/v1/playlist/editor/regeneration/preview": (
+        "playlist_regeneration",
+        "preview",
+        {"revision_id", "candidate_track_ids"},
+    ),
+    "/v1/playlist/editor/regeneration/apply": (
+        "playlist_regeneration",
+        "apply",
+        {"revision_id", "candidate_track_ids", "regeneration_id", "path_id"},
+    ),
 }
 
 _CONFLICT_CODES = {
@@ -38,6 +66,11 @@ _CONFLICT_CODES = {
     "playlist_replacement_analysis_missing",
     "playlist_replacement_analysis_failed",
     "playlist_replacement_analysis_incomplete",
+    "playlist_regeneration_anchor_required",
+    "playlist_regeneration_locked_track_missing",
+    "playlist_regeneration_evidence_unavailable",
+    "playlist_regeneration_projection_failed",
+    "playlist_regeneration_stale",
 }
 
 
@@ -56,9 +89,14 @@ def install_playlist_editor_sidecar() -> None:
             if route is None:
                 super().do_POST()
                 return
-            self._handle_playlist_editor(route[0], route[1])
+            self._handle_playlist_editor(route[0], route[1], route[2])
 
-        def _handle_playlist_editor(self, operation: str, expected_keys: set[str]) -> None:
+        def _handle_playlist_editor(
+            self,
+            service_name: str,
+            operation: str,
+            expected_keys: set[str],
+        ) -> None:
             if not self._authorized():
                 self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
                 return
@@ -70,9 +108,10 @@ def install_playlist_editor_sidecar() -> None:
                 )
                 return
             try:
-                method = getattr(self.sidecar_server.playlist_editor, operation)
+                service = getattr(self.sidecar_server, service_name)
+                method = getattr(service, operation)
                 result = method(**payload)
-            except DesktopPlaylistEditorTransportError as exc:
+            except (DesktopPlaylistEditorTransportError, DesktopPlaylistRegenerationServiceError) as exc:
                 status = (
                     HTTPStatus.CONFLICT if exc.code in _CONFLICT_CODES else HTTPStatus.BAD_REQUEST
                 )
@@ -94,6 +133,7 @@ def install_playlist_editor_sidecar() -> None:
             self.playlist_editor = DesktopPlaylistEditorTransport(
                 proposal_transport=self.set_proposal,
             )
+            self.playlist_regeneration = DesktopPlaylistRegenerationService()
 
     sidecar._SidecarHTTPServer = PlaylistEditorHTTPServer
     _INSTALLED = True
