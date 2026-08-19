@@ -23,7 +23,8 @@
         "main-set-proposal",
         "main-playlist-editor",
         "main-playlist-export",
-        "main-playlist-evidence-export"
+        "main-playlist-evidence-export",
+        "main-playlist-vendor-interop"
       ]
     },
     "withGlobalTauri": true
