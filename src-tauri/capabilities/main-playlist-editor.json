@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-playlist-editor",
+  "description": "Allow the local main window to perform only explicit governed APPLAYLIST playlist revision operations.",
+  "local": true,
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "permissions": [
+    "allow-playlist-editor-accept",
+    "allow-playlist-editor-reorder",
+    "allow-playlist-editor-lock",
+    "allow-playlist-editor-replace",
+    "allow-playlist-editor-history"
+  ]
+}

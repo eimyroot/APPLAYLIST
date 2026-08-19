@@ -6,7 +6,9 @@
   <title>APPLAYLIST Desktop</title>
   <link rel="stylesheet" href="./app.css">
   <link rel="stylesheet" href="./set-proposal.css">
+  <link rel="stylesheet" href="./playlist-editor.css">
   <script src="./app.js" defer></script>
+  <script src="./playlist-editor.js" defer></script>
   <script src="./set-proposal.js" defer></script>
 </head>
 <body>
@@ -32,34 +34,23 @@
       <section id="import-progress" aria-labelledby="import-progress-heading" hidden>
         <h3 id="import-progress-heading">Import progress</h3>
         <dl class="summary-grid">
-          <dt>Phase</dt>
-          <dd id="progress-phase">—</dd>
-          <dt>Discovered</dt>
-          <dd id="progress-discovered">0</dd>
-          <dt>Accepted</dt>
-          <dd id="progress-accepted">0</dd>
-          <dt>Imported</dt>
-          <dd id="progress-imported">0</dd>
-          <dt>Persisted</dt>
-          <dd id="progress-persisted">0</dd>
+          <dt>Phase</dt><dd id="progress-phase">—</dd>
+          <dt>Discovered</dt><dd id="progress-discovered">0</dd>
+          <dt>Accepted</dt><dd id="progress-accepted">0</dd>
+          <dt>Imported</dt><dd id="progress-imported">0</dd>
+          <dt>Persisted</dt><dd id="progress-persisted">0</dd>
         </dl>
       </section>
 
       <section id="import-summary" aria-labelledby="import-summary-heading" hidden>
         <h3 id="import-summary-heading">Import summary</h3>
         <dl class="summary-grid">
-          <dt>Library</dt>
-          <dd id="summary-library">—</dd>
-          <dt>Discovered</dt>
-          <dd id="summary-discovered">0</dd>
-          <dt>Accepted</dt>
-          <dd id="summary-accepted">0</dd>
-          <dt>Imported</dt>
-          <dd id="summary-imported">0</dd>
-          <dt>Persisted</dt>
-          <dd id="summary-persisted">0</dd>
-          <dt>Issues</dt>
-          <dd id="summary-issues">0</dd>
+          <dt>Library</dt><dd id="summary-library">—</dd>
+          <dt>Discovered</dt><dd id="summary-discovered">0</dd>
+          <dt>Accepted</dt><dd id="summary-accepted">0</dd>
+          <dt>Imported</dt><dd id="summary-imported">0</dd>
+          <dt>Persisted</dt><dd id="summary-persisted">0</dd>
+          <dt>Issues</dt><dd id="summary-issues">0</dd>
         </dl>
       </section>
 
@@ -69,17 +60,7 @@
         <div class="table-wrap">
           <table id="library-table" hidden>
             <caption>Imported library tracks</caption>
-            <thead>
-              <tr>
-                <th scope="col">Analyze</th>
-                <th scope="col">Title</th>
-                <th scope="col">Artist</th>
-                <th scope="col">Format</th>
-                <th scope="col">Duration</th>
-                <th scope="col">State</th>
-                <th scope="col">Metadata</th>
-              </tr>
-            </thead>
+            <thead><tr><th scope="col">Analyze</th><th scope="col">Title</th><th scope="col">Artist</th><th scope="col">Format</th><th scope="col">Duration</th><th scope="col">State</th><th scope="col">Metadata</th></tr></thead>
             <tbody id="library-rows"></tbody>
           </table>
         </div>
@@ -101,12 +82,7 @@
         <button id="cancel-analysis" type="button" disabled>Cancel analysis</button>
         <button id="refresh-inspector" type="button">Refresh inspector</button>
         <label for="inspector-filter">Filter</label>
-        <select id="inspector-filter">
-          <option value="all">All</option>
-          <option value="uncertain">Uncertain</option>
-          <option value="failed">Failed</option>
-          <option value="corrected">Corrected</option>
-        </select>
+        <select id="inspector-filter"><option value="all">All</option><option value="uncertain">Uncertain</option><option value="failed">Failed</option><option value="corrected">Corrected</option></select>
       </div>
 
       <p id="analysis-status" class="status" role="status" aria-live="polite">Select imported tracks to analyze.</p>
@@ -114,18 +90,12 @@
       <section id="analysis-progress" aria-labelledby="analysis-progress-heading" hidden>
         <h3 id="analysis-progress-heading">Analysis progress</h3>
         <dl class="summary-grid">
-          <dt>State</dt>
-          <dd id="analysis-progress-state">—</dd>
-          <dt>Selected</dt>
-          <dd id="analysis-progress-selected">0</dd>
-          <dt>Completed</dt>
-          <dd id="analysis-progress-completed">0</dd>
-          <dt>Succeeded</dt>
-          <dd id="analysis-progress-succeeded">0</dd>
-          <dt>Failed</dt>
-          <dd id="analysis-progress-failed">0</dd>
-          <dt>Uncertain</dt>
-          <dd id="analysis-progress-uncertain">0</dd>
+          <dt>State</dt><dd id="analysis-progress-state">—</dd>
+          <dt>Selected</dt><dd id="analysis-progress-selected">0</dd>
+          <dt>Completed</dt><dd id="analysis-progress-completed">0</dd>
+          <dt>Succeeded</dt><dd id="analysis-progress-succeeded">0</dd>
+          <dt>Failed</dt><dd id="analysis-progress-failed">0</dd>
+          <dt>Uncertain</dt><dd id="analysis-progress-uncertain">0</dd>
         </dl>
       </section>
 
@@ -135,18 +105,7 @@
         <div class="table-wrap">
           <table id="inspector-table" hidden>
             <caption>Persisted analysis evidence</caption>
-            <thead>
-              <tr>
-                <th scope="col">Title</th>
-                <th scope="col">Artist</th>
-                <th scope="col">Status</th>
-                <th scope="col">BPM</th>
-                <th scope="col">Key</th>
-                <th scope="col">Energy</th>
-                <th scope="col">Source</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
+            <thead><tr><th scope="col">Title</th><th scope="col">Artist</th><th scope="col">Status</th><th scope="col">BPM</th><th scope="col">Key</th><th scope="col">Energy</th><th scope="col">Source</th><th scope="col">Action</th></tr></thead>
             <tbody id="inspector-rows"></tbody>
           </table>
         </div>
@@ -162,10 +121,7 @@
           <dt>Evidence</dt><dd id="detail-evidence">—</dd>
           <dt>Error</dt><dd id="detail-error">—</dd>
         </dl>
-        <div>
-          <h4>Warnings</h4>
-          <ul id="detail-warnings"></ul>
-        </div>
+        <div><h4>Warnings</h4><ul id="detail-warnings"></ul></div>
 
         <form id="correction-form">
           <h4>Manual correction</h4>
@@ -177,10 +133,7 @@
             <label>Energy <input id="correction-energy" inputmode="decimal" type="number" min="0" max="1" step="0.01"></label>
             <label>Reason <input id="correction-reason" maxlength="512"></label>
           </div>
-          <div class="actions">
-            <button id="apply-correction" type="submit">Apply correction</button>
-            <button id="reanalyze-track" type="button">Re-analyze track</button>
-          </div>
+          <div class="actions"><button id="apply-correction" type="submit">Apply correction</button><button id="reanalyze-track" type="button">Re-analyze track</button></div>
         </form>
       </section>
     </section>
@@ -188,20 +141,25 @@
     <section id="set-proposal" aria-labelledby="set-proposal-heading">
       <h2 id="set-proposal-heading">Set Proposal Inspector</h2>
       <p>Build a read-only, explainable set proposal from already-persisted analysis evidence. This does not activate optimization or train the Personal DJ Model.</p>
-
       <div class="actions">
         <button id="set-proposal-refresh" type="button">Refresh analyzed tracks</button>
-        <label for="set-proposal-seed">Seed track</label>
-        <select id="set-proposal-seed" disabled></select>
-        <label for="set-proposal-target">Target tracks</label>
-        <input id="set-proposal-target" type="number" min="3" max="8" value="3" step="1" disabled>
+        <label for="set-proposal-seed">Seed track</label><select id="set-proposal-seed" disabled></select>
+        <label for="set-proposal-target">Target tracks</label><input id="set-proposal-target" type="number" min="3" max="8" value="3" step="1" disabled>
         <button id="set-proposal-generate" type="button" disabled>Generate set proposal</button>
       </div>
-
       <p id="set-proposal-status" class="status">Load analyzed tracks to begin.</p>
       <p id="set-proposal-empty" class="empty-state">No successful analyzed tracks loaded.</p>
       <ul id="set-proposal-track-list" class="proposal-track-list"></ul>
       <div id="set-proposal-results"></div>
+    </section>
+
+    <section id="playlist-editor" aria-labelledby="playlist-editor-heading">
+      <h2 id="playlist-editor-heading">Manual Set Editor</h2>
+      <p>Accept one verified proposal path, then append explicit reorder, lock, or replace revisions. History is immutable; editor actions do not train the Personal DJ Model or activate production optimization.</p>
+      <p id="playlist-editor-status" class="status">Generate a Set Proposal to begin.</p>
+      <div id="playlist-editor-source"></div>
+      <div id="playlist-editor-current"></div>
+      <div id="playlist-editor-history"></div>
     </section>
   </main>
 </body>

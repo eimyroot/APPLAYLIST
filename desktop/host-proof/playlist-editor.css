@@ -1,0 +1,32 @@
+#playlist-editor {
+  margin-top: 2rem;
+}
+
+#playlist-editor-source,
+#playlist-editor-current,
+#playlist-editor-history {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.editor-proposal-choice,
+#playlist-editor-current,
+#playlist-editor-history {
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.editor-sequence {
+  display: grid;
+  gap: 0.55rem;
+  padding-left: 1.5rem;
+}
+
+.editor-sequence > li {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(12rem, 1fr) auto auto auto minmax(10rem, 1fr) auto;
+}

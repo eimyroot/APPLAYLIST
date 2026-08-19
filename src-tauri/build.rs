@@ -13,6 +13,11 @@ fn main() {
             "analysis_correct",
             "analysis_reanalyze",
             "set_proposal_generate",
+            "playlist_editor_accept",
+            "playlist_editor_reorder",
+            "playlist_editor_lock",
+            "playlist_editor_replace",
+            "playlist_editor_history",
         ]),
     ))
     .expect("failed to configure APPLAYLIST desktop host build");

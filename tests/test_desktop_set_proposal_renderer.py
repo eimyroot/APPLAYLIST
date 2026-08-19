@@ -85,6 +85,7 @@ def test_set_proposal_tauri_surface_is_separate_and_narrow() -> None:
     assert set(conf["app"]["security"]["capabilities"]) == {
         "main-library-root",
         "main-set-proposal",
+        "main-playlist-editor",
     }
 
     assert "#[serde(deny_unknown_fields)]" in rust
