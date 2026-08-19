@@ -53,8 +53,9 @@ def test_playlist_evidence_renderer_is_external_strict_and_path_safe() -> None:
         "X-APPLAYLIST-Readiness-Nonce",
         "127.0.0.1",
         "content_utf8",
-        "source_path",
-        "output_path",
+        '"path"',
+        '"file_path"',
+        '"output_path"',
     ):
         assert forbidden not in js
 
@@ -72,7 +73,7 @@ def test_playlist_evidence_tauri_surface_is_separate_and_narrow() -> None:
         assert f"allow-{command.replace('_', '-')}" in capability["permissions"]
 
     assert ".manage(PlaylistEvidenceExportBridge::from_environment())" in lib_rs
-    assert '"main-playlist-evidence-export"' in conf["app"]["security"]["capabilities"]
+    assert "main-playlist-evidence-export" in conf["app"]["security"]["capabilities"]
     assert "#[serde(deny_unknown_fields)]" in rust
     assert '"/v1/playlist/evidence/preview"' in rust
     assert '"/v1/playlist/evidence/material"' in rust
