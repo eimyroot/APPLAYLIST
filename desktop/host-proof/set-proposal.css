@@ -1,0 +1,36 @@
+#set-proposal {
+  margin-top: 2rem;
+}
+
+.proposal-track-list {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+
+.proposal-track-list label {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+}
+
+#set-proposal-results {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.proposal-summary,
+.proposal-alternative {
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.proposal-alternative ol {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 1.5rem;
+}

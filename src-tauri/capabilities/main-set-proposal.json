@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-set-proposal",
+  "description": "Allow the local main window to request only bounded read-only APPLAYLIST set proposals.",
+  "local": true,
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "permissions": [
+    "allow-set-proposal-generate"
+  ]
+}

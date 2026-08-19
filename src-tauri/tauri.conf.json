@@ -19,7 +19,8 @@
     "security": {
       "csp": "default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'",
       "capabilities": [
-        "main-library-root"
+        "main-library-root",
+        "main-set-proposal"
       ]
     },
     "withGlobalTauri": true
