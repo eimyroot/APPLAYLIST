@@ -21,7 +21,7 @@ def test_regeneration_renderer_is_explicit_dom_safe_and_path_free() -> None:
     assert "applaylist-desktop-playlist-regeneration-r1" in editor
     assert '"regenerate"' in editor
     assert "Regenerate around locks" in editor
-    assert "position 1 must be locked" in editor
+    assert "position 1 must be locked" in editor.lower()
     assert "document.createElement" in editor
     assert ".textContent" in editor
     assert "innerHTML" not in editor
