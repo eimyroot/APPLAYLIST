@@ -14,7 +14,7 @@
   }
 
   const TOKEN = /^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,255}$/;
-  const OPERATIONS = new Set(["accept", "reorder", "lock", "replace"]);
+  const OPERATIONS = new Set(["accept", "reorder", "lock", "replace", "regenerate"]);
   let lastProposal = null;
   let activeRevision = null;
   let replacementTracks = new Map();
@@ -210,6 +210,12 @@
     const result = await originalInvoke(command, args);
     if (validProposalContext(command, args, result)) {
       captureProposal(args, result);
+    }
+    if (command === "playlist_editor_regeneration_apply" && validRevision(result)) {
+      activeRevision = result;
+      await refreshReplacementTracks();
+      await refreshHistory();
+      setStatus("Regeneration appended as a new immutable revision.");
     }
     return result;
   }
