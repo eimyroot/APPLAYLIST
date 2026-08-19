@@ -380,8 +380,8 @@ fn request_json(
         .windows(4)
         .position(|window| window == b"\r\n\r\n")
         .ok_or_else(InspectorError::request_failed)?;
-    let headers = std::str::from_utf8(&response[..boundary])
-        .map_err(|_| InspectorError::request_failed())?;
+    let headers =
+        std::str::from_utf8(&response[..boundary]).map_err(|_| InspectorError::request_failed())?;
     let mut lines = headers.split("\r\n");
     let mut parts = lines
         .next()
@@ -460,9 +460,14 @@ fn valid_item(value: &Value, expected_index: usize) -> bool {
     let Some(object) = value.as_object() else {
         return false;
     };
-    exact_keys(object, &["order_index", "track_id", "display_name", "locked"])
-        && object.get("order_index").and_then(Value::as_u64) == Some(expected_index as u64)
-        && object.get("track_id").and_then(Value::as_str).is_some_and(token)
+    exact_keys(
+        object,
+        &["order_index", "track_id", "display_name", "locked"],
+    ) && object.get("order_index").and_then(Value::as_u64) == Some(expected_index as u64)
+        && object
+            .get("track_id")
+            .and_then(Value::as_str)
+            .is_some_and(token)
         && object
             .get("display_name")
             .and_then(Value::as_str)
@@ -512,7 +517,9 @@ fn valid_snapshot(value: &Value) -> bool {
         && object
             .get("created_at")
             .and_then(Value::as_str)
-            .is_some_and(|value| !value.is_empty() && value.len() <= 64 && !value.chars().any(char::is_control))
+            .is_some_and(|value| {
+                !value.is_empty() && value.len() <= 64 && !value.chars().any(char::is_control)
+            })
 }
 
 fn valid_confidence(value: &Value) -> bool {
@@ -521,20 +528,26 @@ fn valid_confidence(value: &Value) -> bool {
     };
     exact_keys(
         object,
-        &["score", "calibration_state", "evidence_count", "disagreement"],
+        &[
+            "score",
+            "calibration_state",
+            "evidence_count",
+            "disagreement",
+        ],
     ) && object
         .get("calibration_state")
         .and_then(Value::as_str)
         .is_some_and(|value| matches!(value, "unknown" | "uncalibrated" | "calibrated"))
-        && object.get("evidence_count").and_then(Value::as_u64).unwrap_or(0) >= 1
+        && object
+            .get("evidence_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+            >= 1
 }
 
 fn valid_token_array(value: &Value, max: usize) -> bool {
     value.as_array().is_some_and(|items| {
-        items.len() <= max
-            && items
-                .iter()
-                .all(|item| item.as_str().is_some_and(token))
+        items.len() <= max && items.iter().all(|item| item.as_str().is_some_and(token))
     })
 }
 
@@ -582,21 +595,28 @@ fn valid_assessment(value: &Value) -> bool {
     if !object
         .get("music_dna_revision_refs")
         .and_then(Value::as_array)
-        .is_some_and(|items| items.len() == 2 && items.iter().all(|item| item.as_str().is_some_and(token)))
+        .is_some_and(|items| {
+            items.len() == 2 && items.iter().all(|item| item.as_str().is_some_and(token))
+        })
         || !object
             .get("created_at")
             .and_then(Value::as_str)
             .is_some_and(|value| !value.is_empty() && value.len() <= 64)
         || !valid_confidence(&object["confidence"])
         || !valid_token_array(&object["evidence_refs"], 64)
-        || !object.get("warnings").and_then(Value::as_array).is_some_and(|items| {
-            items.len() <= 64
-                && items.iter().all(|item| {
-                    item.as_str().is_some_and(|value| {
-                        value.len() <= 512 && !value.starts_with('/') && !value.chars().any(char::is_control)
+        || !object
+            .get("warnings")
+            .and_then(Value::as_array)
+            .is_some_and(|items| {
+                items.len() <= 64
+                    && items.iter().all(|item| {
+                        item.as_str().is_some_and(|value| {
+                            value.len() <= 512
+                                && !value.starts_with('/')
+                                && !value.chars().any(char::is_control)
+                        })
                     })
-                })
-        })
+            })
     {
         return false;
     }
@@ -619,7 +639,10 @@ fn valid_assessment(value: &Value) -> bool {
                 "required_capabilities",
                 "explanation_codes",
             ],
-        ) || !item.get("strategy").and_then(Value::as_str).is_some_and(token)
+        ) || !item
+            .get("strategy")
+            .and_then(Value::as_str)
+            .is_some_and(token)
             || !valid_token_array(&item["required_capabilities"], 32)
             || !valid_token_array(&item["explanation_codes"], 32)
         {
@@ -679,20 +702,37 @@ fn valid_assessment(value: &Value) -> bool {
         return false;
     }
 
-    object.get("explanations").and_then(Value::as_array).is_some_and(|items| {
-        items.len() <= 64
-            && items.iter().all(|value| {
-                let Some(item) = value.as_object() else {
-                    return false;
-                };
-                exact_keys(item, &["code", "severity", "dimension", "evidence_refs", "confidence"])
-                    && item.get("code").and_then(Value::as_str).is_some_and(token)
-                    && item.get("severity").and_then(Value::as_str).is_some_and(token)
-                    && item.get("dimension").and_then(Value::as_str).is_some_and(token)
-                    && valid_token_array(&item["evidence_refs"], 64)
-                    && valid_confidence(&item["confidence"])
-            })
-    })
+    object
+        .get("explanations")
+        .and_then(Value::as_array)
+        .is_some_and(|items| {
+            items.len() <= 64
+                && items.iter().all(|value| {
+                    let Some(item) = value.as_object() else {
+                        return false;
+                    };
+                    exact_keys(
+                        item,
+                        &[
+                            "code",
+                            "severity",
+                            "dimension",
+                            "evidence_refs",
+                            "confidence",
+                        ],
+                    ) && item.get("code").and_then(Value::as_str).is_some_and(token)
+                        && item
+                            .get("severity")
+                            .and_then(Value::as_str)
+                            .is_some_and(token)
+                        && item
+                            .get("dimension")
+                            .and_then(Value::as_str)
+                            .is_some_and(token)
+                        && valid_token_array(&item["evidence_refs"], 64)
+                        && valid_confidence(&item["confidence"])
+                })
+        })
 }
 
 fn validate_response(value: &Value, revision_id: &str, pair_index: usize) -> bool {
@@ -721,7 +761,10 @@ fn validate_response(value: &Value, revision_id: &str, pair_index: usize) -> boo
     ) || object.get("schema").and_then(Value::as_str)
         != Some("applaylist-desktop-transition-inspection-r1")
         || object.get("revision_id").and_then(Value::as_str) != Some(revision_id)
-        || !object.get("playlist_id").and_then(Value::as_str).is_some_and(token)
+        || !object
+            .get("playlist_id")
+            .and_then(Value::as_str)
+            .is_some_and(token)
         || object.get("pair_index").and_then(Value::as_u64) != Some(pair_index as u64)
         || !valid_item(&object["source"], pair_index)
         || !valid_item(&object["target"], pair_index + 1)
