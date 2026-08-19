@@ -21,7 +21,8 @@
       "capabilities": [
         "main-library-root",
         "main-set-proposal",
-        "main-playlist-editor"
+        "main-playlist-editor",
+        "main-playlist-export"
       ]
     },
     "withGlobalTauri": true
