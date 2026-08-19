@@ -168,7 +168,7 @@ def test_revision_rows_are_immutable_at_sqlite_boundary(
                 (root["revision_id"],),
             )
         conn.rollback()
-        with pytest.raises(sqlite3.DatabaseError, match="playlist revisions are immutable"):
+        with pytest.raises(sqlite3.DatabaseError, match="playlist revision items are immutable"):
             conn.execute(
                 "DELETE FROM playlist_revision_items WHERE revision_id = ?",
                 (root["revision_id"],),
