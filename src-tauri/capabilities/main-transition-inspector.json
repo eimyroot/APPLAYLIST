@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-transition-inspector",
+  "description": "Read-only selected transition inspection for the main desktop window.",
+  "windows": ["main"],
+  "platforms": ["macOS"],
+  "permissions": [
+    "core:default",
+    "allow-playlist-transition-inspect"
+  ]
+}
