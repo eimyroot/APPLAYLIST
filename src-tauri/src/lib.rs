@@ -5,6 +5,7 @@ mod library_capability;
 mod playlist_editor;
 mod playlist_evidence_export;
 mod playlist_export;
+mod playlist_regeneration;
 mod playlist_vendor_interop;
 mod set_proposal;
 mod sidecar_bridge;
@@ -17,6 +18,7 @@ use library_capability::LibraryCapabilityRegistry;
 use playlist_editor::PlaylistEditorBridge;
 use playlist_evidence_export::PlaylistEvidenceExportBridge;
 use playlist_export::PlaylistExportBridge;
+use playlist_regeneration::PlaylistRegenerationBridge;
 use playlist_vendor_interop::PlaylistVendorInteropBridge;
 use set_proposal::SetProposalBridge;
 use sidecar_bridge::SidecarBridge;
@@ -33,6 +35,7 @@ pub fn run() {
         .manage(AnalysisSidecarBridge::from_environment())
         .manage(SetProposalBridge::from_environment())
         .manage(PlaylistEditorBridge::from_environment())
+        .manage(PlaylistRegenerationBridge::from_environment())
         .manage(PlaylistExportBridge::from_environment())
         .manage(PlaylistEvidenceExportBridge::from_environment())
         .manage(PlaylistVendorInteropBridge::from_environment())
@@ -55,6 +58,8 @@ pub fn run() {
             playlist_editor::playlist_editor_lock,
             playlist_editor::playlist_editor_replace,
             playlist_editor::playlist_editor_history,
+            playlist_regeneration::playlist_editor_regeneration_preview,
+            playlist_regeneration::playlist_editor_regeneration_apply,
             playlist_export::playlist_export_preview,
             playlist_export::playlist_export_m3u8,
             playlist_evidence_export::playlist_evidence_preview,
