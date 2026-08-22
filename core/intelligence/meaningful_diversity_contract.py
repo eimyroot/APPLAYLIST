@@ -69,9 +69,9 @@ class MeaningfulDiversityPolicy:
     alternative_limit: int = 2
     minimum_meaningful_distance: float = 0.20
     minimum_style_coherence: float = 0.55
-    minimum_energy_coherence: float = 0.55
+    minimum_energy_coherence: float = 0.70
     minimum_adjacent_style_overlap: float = 0.20
-    maximum_style_drift_fraction: float = 0.35
+    maximum_style_drift_fraction: float = 0.25
     maximum_style_avoid_fraction: float = 0.0
     maximum_non_target_style_concentration: float = 0.60
     style_distance_weight: float = 0.60
