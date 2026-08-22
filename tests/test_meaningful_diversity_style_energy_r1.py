@@ -260,7 +260,7 @@ def test_peak_energy_mismatch_fails_coherence() -> None:
 
     assessment = selection.coherence_assessments[0]
     assert assessment.energy_coherence is not None
-    assert assessment.energy_coherence < 0.55
+    assert assessment.energy_coherence < MeaningfulDiversityPolicy().minimum_energy_coherence
     assert "energy_coherence_below_policy" in assessment.reason_codes
 
 
