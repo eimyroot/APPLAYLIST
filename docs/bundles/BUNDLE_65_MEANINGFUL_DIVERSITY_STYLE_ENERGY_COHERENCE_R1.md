@@ -104,6 +104,7 @@ These values are versioned policy, not trained truth. Human pilot evidence may j
 - bounded style-tag cardinality and string length;
 - duplicate per-track musical evidence rejected;
 - evidence artifacts refuse overwrite in the new gated wrapper;
+- existing files **and dangling symlinks** at evidence artifact destinations are rejected before write;
 - failed gate withholds blinded reviewer packet;
 - no optimizer score, rank, TransitionAssessment, or historical evidence mutation.
 
@@ -123,7 +124,8 @@ Unit and integration tests cover:
 10. bounded untrusted style-tag cardinality;
 11. cross-strategy greedy-vs-beam comparison;
 12. failed real-library gate writes a report but withholds reviewer/private reviewer artifacts;
-13. source path ranks and identities remain unchanged.
+13. source path ranks and identities remain unchanged;
+14. dangling evidence symlink is rejected before write and cannot redirect output outside the evidence root.
 
 ## Independent verification requirements
 
