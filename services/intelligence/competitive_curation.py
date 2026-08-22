@@ -154,10 +154,15 @@ def _energy_fit(
     if distance <= effective_tolerance:
         trajectory_fit = 1.0
     else:
-        denominator = max(0.05, 1.0 - effective_tolerance)
+        # Competitive shadow scoring intentionally decays over one additional
+        # tolerance-width. The canonical Set Engine uses a broader decay curve,
+        # but that curve allowed a 0.40-0.50 energy path to look acceptable for
+        # a ~0.86 PEAK target. A large deficit must not be masked by other strong
+        # curation dimensions.
+        decay_span = max(0.08, effective_tolerance)
         trajectory_fit = max(
             0.0,
-            1.0 - (distance - effective_tolerance) / denominator,
+            1.0 - (distance - effective_tolerance) / decay_span,
         )
 
     phase = intent.phase(step.phase_id)
@@ -166,7 +171,10 @@ def _energy_fit(
     band_fit = phase.target_energy_band.fit(energy)
     if band_fit is None:
         return trajectory_fit
-    return (trajectory_fit + band_fit) / 2.0
+    # The explicit dramaturgical trajectory is the primary signal; the broader
+    # phase band is a secondary guard and must not rescue a badly under-powered
+    # path by itself.
+    return 0.75 * trajectory_fit + 0.25 * band_fit
 
 
 def _mean(values: list[float]) -> float | None:
