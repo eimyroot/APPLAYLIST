@@ -80,13 +80,15 @@ Missing required style or energy evidence is never interpreted as positive diver
 Default R1 checks include:
 
 - minimum style coherence `0.55`;
-- minimum energy coherence `0.55`;
+- minimum energy coherence `0.70`;
 - minimum adjacent style overlap `0.20`;
-- maximum style-drift fraction `0.35`;
+- maximum style-drift fraction `0.25`;
 - maximum avoided-style fraction `0.0`;
 - maximum non-target style concentration `0.60`;
 - complete style evidence required;
 - complete energy evidence required.
+
+The initial CI run proved the earlier `0.55` energy floor and `0.35` drift fraction were too permissive for the explicit peak-energy and abrupt-drift negative fixtures. R1 therefore tightens those two evidence gates to `0.70` and `0.25`; this changes only post-search evidence acceptance and never source optimizer ranking.
 
 These values are versioned policy, not trained truth. Human pilot evidence may justify later policy changes in a separate governed slice.
 
