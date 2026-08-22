@@ -90,8 +90,8 @@ class MeaningfulDiversityPolicy:
     maximum_style_drift_fraction: float = 0.25
     maximum_style_avoid_fraction: float = 0.0
     maximum_non_target_style_concentration: float = 0.60
-    style_distance_weight: float = 0.60
-    energy_distance_weight: float = 0.40
+    style_distance_weight: float = 0.80
+    energy_distance_weight: float = 0.20
     require_complete_style_evidence: bool = True
     require_complete_energy_evidence: bool = True
 
