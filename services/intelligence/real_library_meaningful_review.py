@@ -300,7 +300,7 @@ def materialize_real_library_pilot_meaningful_r1(
     private_path = output / "APPLAYLIST_REAL_LIBRARY_RUNTIME_EVIDENCE_R1.private.json"
     reviewer_path = output / "APPLAYLIST_BLINDED_HUMAN_DJ_REVIEW_PACKET_R1.json"
     for target in (report_path, private_path, reviewer_path):
-        if target.exists():
+        if target.exists() or target.is_symlink():
             raise RealLibraryPilotError(f"refusing to overwrite evidence artifact: {target}")
 
     failed = tuple(
