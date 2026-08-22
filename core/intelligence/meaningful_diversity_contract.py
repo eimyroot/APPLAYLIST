@@ -9,10 +9,12 @@ from core.intelligence.set_optimizer_contract import SetPathAlternative
 MEANINGFUL_DIVERSITY_CONTRACT_VERSION = "meaningful-diversity-style-energy-r1"
 
 
-def _non_empty(value: str, field_name: str) -> str:
+def _non_empty(value: str, field_name: str, *, maximum: int = 256) -> str:
     normalized = str(value).strip()
     if not normalized:
         raise ValueError(f"{field_name} must not be empty")
+    if len(normalized) > maximum:
+        raise ValueError(f"{field_name} exceeds maximum length {maximum}")
     return normalized
 
 
@@ -44,19 +46,20 @@ class TrackMusicalEvidence:
             tags = tuple(
                 sorted(
                     {
-                        str(item).strip().lower()
+                        _non_empty(item, "style_tag", maximum=128).lower()
                         for item in self.style_tags
                         if str(item).strip()
                     }
                 )
             )
+            if len(tags) > 32:
+                raise ValueError("style_tags must contain at most 32 unique tags")
             object.__setattr__(self, "style_tags", tags)
         object.__setattr__(self, "energy", _unit(self.energy, "energy"))
-        object.__setattr__(
-            self,
-            "evidence_refs",
-            tuple(_non_empty(item, "evidence_ref") for item in self.evidence_refs),
-        )
+        refs = tuple(_non_empty(item, "evidence_ref") for item in self.evidence_refs)
+        if len(refs) > 64:
+            raise ValueError("evidence_refs must contain at most 64 entries")
+        object.__setattr__(self, "evidence_refs", refs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +70,8 @@ class MeaningfulDiversityPolicy:
     minimum_meaningful_distance: float = 0.20
     minimum_style_coherence: float = 0.55
     minimum_energy_coherence: float = 0.55
+    minimum_adjacent_style_overlap: float = 0.20
+    maximum_style_drift_fraction: float = 0.35
     maximum_style_avoid_fraction: float = 0.0
     maximum_non_target_style_concentration: float = 0.60
     style_distance_weight: float = 0.60
@@ -87,6 +92,8 @@ class MeaningfulDiversityPolicy:
             "minimum_meaningful_distance",
             "minimum_style_coherence",
             "minimum_energy_coherence",
+            "minimum_adjacent_style_overlap",
+            "maximum_style_drift_fraction",
             "maximum_style_avoid_fraction",
             "maximum_non_target_style_concentration",
             "style_distance_weight",
@@ -103,6 +110,7 @@ class PathCoherenceAssessment:
     source_rank: int
     style_coherence: float | None
     energy_coherence: float | None
+    style_drift_fraction: float | None
     style_avoid_fraction: float | None
     non_target_style_concentration: float | None
     missing_style_track_ids: tuple[str, ...]
@@ -117,13 +125,22 @@ class PathCoherenceAssessment:
         for field_name in (
             "style_coherence",
             "energy_coherence",
+            "style_drift_fraction",
             "style_avoid_fraction",
             "non_target_style_concentration",
         ):
             object.__setattr__(self, field_name, _unit(getattr(self, field_name), field_name))
-        object.__setattr__(self, "missing_style_track_ids", tuple(self.missing_style_track_ids))
-        object.__setattr__(self, "missing_energy_track_ids", tuple(self.missing_energy_track_ids))
-        object.__setattr__(self, "reason_codes", tuple(self.reason_codes))
+        object.__setattr__(
+            self,
+            "missing_style_track_ids",
+            tuple(dict.fromkeys(self.missing_style_track_ids)),
+        )
+        object.__setattr__(
+            self,
+            "missing_energy_track_ids",
+            tuple(dict.fromkeys(self.missing_energy_track_ids)),
+        )
+        object.__setattr__(self, "reason_codes", tuple(dict.fromkeys(self.reason_codes)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +167,7 @@ class PairwiseMeaningfulDiversity:
         )
         for field_name in ("style_distance", "energy_distance", "meaningful_distance"):
             object.__setattr__(self, field_name, _unit(getattr(self, field_name), field_name))
-        object.__setattr__(self, "reason_codes", tuple(self.reason_codes))
+        object.__setattr__(self, "reason_codes", tuple(dict.fromkeys(self.reason_codes)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,7 +184,7 @@ class MeaningfulAlternativeDecision:
         if self.source_rank <= 0:
             raise ValueError("source_rank must be positive")
         object.__setattr__(self, "comparison_refs", tuple(self.comparison_refs))
-        object.__setattr__(self, "reason_codes", tuple(self.reason_codes))
+        object.__setattr__(self, "reason_codes", tuple(dict.fromkeys(self.reason_codes)))
 
 
 @dataclass(frozen=True, slots=True)
