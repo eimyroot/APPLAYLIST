@@ -35,6 +35,7 @@ New components:
 - `core/intelligence/meaningful_diversity_contract.py`
   - bounded, immutable evidence contracts;
   - explicit statuses: `sufficient`, `insufficient_meaningful_diversity`, `not_proven_missing_evidence`;
+  - bounded style-family normalization so related subgenres retain their parent evidence (`Tech House -> tech house + house`, `Rave Techno -> rave techno + techno`, `UKG -> ukg + garage`);
   - style/energy coherence evidence;
   - pairwise meaningful-distance evidence;
   - activation structurally forbidden.
@@ -68,8 +69,10 @@ Two paths must first be technically different. Musical distance then combines po
 
 Default weights:
 
-- style `0.60`;
-- energy `0.40`.
+- style `0.80`;
+- energy `0.20`.
+
+Energy diversity is deliberately not allowed to dominate the distance score because energy already has its own coherence gate; a musically inappropriate energy jump must not manufacture a supposedly useful alternative.
 
 Default minimum meaningful distance: `0.20`.
 
