@@ -85,16 +85,13 @@ def _evaluation_intent(
 ) -> PlaylistIntent:
     goal, phase_type, target_energy = _ROLE_POLICY[role]
     normalized_seed_genre = str(seed_genre or "").strip().lower()
-    # RESET is intentionally a style bridge. Other roles use the explicitly selected
-    # seed track's library genre as the review-only style anchor. This never feeds back
-    # into optimizer ranking.
     style_targets = (
         ()
         if role is CuratedSetRole.RESET or not normalized_seed_genre
         else (normalized_seed_genre,)
     )
     phase = SetPhase(
-        phase_id=f"meaningful-review:{case_id}",
+        phase_id=f"phase:{case_id}",
         phase_type=phase_type,
         ordinal=0,
         target_fraction_start=0.0,
