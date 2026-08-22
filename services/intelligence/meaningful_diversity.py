@@ -308,6 +308,59 @@ def _pairwise(
     )
 
 
+def assess_path_coherence(
+    *,
+    path: SetPathAlternative,
+    intent: PlaylistIntent,
+    track_evidence: tuple[TrackMusicalEvidence, ...],
+    policy: MeaningfulDiversityPolicy = MeaningfulDiversityPolicy(),
+) -> PathCoherenceAssessment:
+    """Assess one source path without changing optimizer truth."""
+    return _coherence(
+        path=path,
+        intent=intent,
+        evidence_by_track=_evidence_index(track_evidence),
+        policy=policy,
+    )
+
+
+def compare_meaningful_paths(
+    *,
+    reference: SetPathAlternative,
+    candidate: SetPathAlternative,
+    intent: PlaylistIntent,
+    track_evidence: tuple[TrackMusicalEvidence, ...],
+    policy: MeaningfulDiversityPolicy = MeaningfulDiversityPolicy(),
+) -> tuple[
+    PathCoherenceAssessment,
+    PathCoherenceAssessment,
+    PairwiseMeaningfulDiversity,
+]:
+    """Compare paths from the same or different search strategies, evidence-only."""
+    evidence_by_track = _evidence_index(track_evidence)
+    reference_coherence = _coherence(
+        path=reference,
+        intent=intent,
+        evidence_by_track=evidence_by_track,
+        policy=policy,
+    )
+    candidate_coherence = _coherence(
+        path=candidate,
+        intent=intent,
+        evidence_by_track=evidence_by_track,
+        policy=policy,
+    )
+    comparison = _pairwise(
+        candidate=candidate,
+        reference=reference,
+        evidence_by_track=evidence_by_track,
+        candidate_coherence=candidate_coherence,
+        reference_coherence=reference_coherence,
+        policy=policy,
+    )
+    return reference_coherence, candidate_coherence, comparison
+
+
 def _selection_id(
     *,
     result: SetOptimizerResult,
@@ -335,7 +388,7 @@ def select_meaningfully_diverse_alternatives(
     track_evidence: tuple[TrackMusicalEvidence, ...],
     policy: MeaningfulDiversityPolicy = MeaningfulDiversityPolicy(),
 ) -> MeaningfulDiversitySelection:
-    """Evidence-only post-search selection for musically meaningful A/B alternatives.
+    """Evidence-only post-search selection for musically meaningful alternatives.
 
     The optimizer remains the only path-search and ranking authority. Source rank #1 is
     always preserved as the reference path. This layer never rewrites source path rank,
@@ -475,4 +528,8 @@ def select_meaningfully_diverse_alternatives(
     )
 
 
-__all__ = ["select_meaningfully_diverse_alternatives"]
+__all__ = [
+    "assess_path_coherence",
+    "compare_meaningful_paths",
+    "select_meaningfully_diverse_alternatives",
+]
