@@ -7,6 +7,13 @@ from enum import StrEnum
 from core.intelligence.set_optimizer_contract import SetPathAlternative
 
 MEANINGFUL_DIVERSITY_CONTRACT_VERSION = "meaningful-diversity-style-energy-r1"
+_STYLE_PARENT_WORDS = ("house", "techno", "garage", "bassline", "trance", "breakbeat")
+_STYLE_ALIASES = {
+    "ukg": "garage",
+    "uk garage": "garage",
+    "drum & bass": "dnb",
+    "drum and bass": "dnb",
+}
 
 
 def _non_empty(value: str, field_name: str, *, maximum: int = 256) -> str:
@@ -27,6 +34,23 @@ def _unit(value: float | None, field_name: str) -> float | None:
     return numeric
 
 
+def _expanded_style_tags(items: tuple[str, ...]) -> tuple[str, ...]:
+    expanded: set[str] = set()
+    for raw in items:
+        normalized = _non_empty(raw, "style_tag", maximum=128).lower()
+        expanded.add(normalized)
+        alias = _STYLE_ALIASES.get(normalized)
+        if alias is not None:
+            expanded.add(alias)
+        words = set(normalized.replace("-", " ").replace("_", " ").split())
+        for parent in _STYLE_PARENT_WORDS:
+            if parent in words:
+                expanded.add(parent)
+    if len(expanded) > 32:
+        raise ValueError("style_tags must contain at most 32 normalized tags")
+    return tuple(sorted(expanded))
+
+
 class MeaningfulDiversityStatus(StrEnum):
     SUFFICIENT = "sufficient"
     INSUFFICIENT_MEANINGFUL_DIVERSITY = "insufficient_meaningful_diversity"
@@ -43,18 +67,10 @@ class TrackMusicalEvidence:
     def __post_init__(self) -> None:
         object.__setattr__(self, "track_id", _non_empty(self.track_id, "track_id"))
         if self.style_tags is not None:
-            tags = tuple(
-                sorted(
-                    {
-                        _non_empty(item, "style_tag", maximum=128).lower()
-                        for item in self.style_tags
-                        if str(item).strip()
-                    }
-                )
-            )
-            if len(tags) > 32:
-                raise ValueError("style_tags must contain at most 32 unique tags")
-            object.__setattr__(self, "style_tags", tags)
+            raw_tags = tuple(str(item).strip() for item in self.style_tags if str(item).strip())
+            if len(set(raw_tags)) > 32:
+                raise ValueError("style_tags must contain at most 32 unique source tags")
+            object.__setattr__(self, "style_tags", _expanded_style_tags(raw_tags))
         object.__setattr__(self, "energy", _unit(self.energy, "energy"))
         refs = tuple(_non_empty(item, "evidence_ref") for item in self.evidence_refs)
         if len(refs) > 64:
