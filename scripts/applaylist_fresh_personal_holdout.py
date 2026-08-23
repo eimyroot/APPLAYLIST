@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 
 from services.intelligence.fresh_personal_holdout_runner import (
+    FreshPersonalHoldoutRunnerError,
     materialize_fresh_personal_holdout_r1,
 )
 
@@ -17,6 +19,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", required=True)
     parser.add_argument("--database", required=True)
     parser.add_argument("--canonical-sha", required=True)
+    parser.add_argument("--canonical-branch", default="feature/bundle-0-bootstrap")
     parser.add_argument("--generated-at", required=True)
     parser.add_argument("--sampling-seed", required=True)
     parser.add_argument("--blinding-seed", required=True)
@@ -26,8 +29,52 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _git(*args: str) -> str:
+    completed = subprocess.run(
+        ("git", *args),
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def verify_canonical_checkout(*, canonical_sha: str, canonical_branch: str) -> None:
+    """Fail closed unless the run is launched from the exact clean canonical checkout."""
+    try:
+        head = _git("rev-parse", "HEAD")
+        branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+        dirty = _git("status", "--porcelain")
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        raise FreshPersonalHoldoutRunnerError(
+            "fresh holdout run requires a readable local Git checkout"
+        ) from exc
+
+    expected_sha = str(canonical_sha).strip()
+    expected_branch = str(canonical_branch).strip()
+    if not expected_sha or not expected_branch:
+        raise FreshPersonalHoldoutRunnerError("canonical SHA/branch must not be empty")
+    if head != expected_sha:
+        raise FreshPersonalHoldoutRunnerError(
+            f"local HEAD {head} does not match declared canonical SHA {expected_sha}"
+        )
+    if branch != expected_branch:
+        raise FreshPersonalHoldoutRunnerError(
+            f"local branch {branch} does not match canonical branch {expected_branch}"
+        )
+    if dirty:
+        raise FreshPersonalHoldoutRunnerError(
+            "fresh holdout run requires a clean working tree before evidence generation"
+        )
+
+
 def main() -> int:
     args = _parser().parse_args()
+    verify_canonical_checkout(
+        canonical_sha=args.canonical_sha,
+        canonical_branch=args.canonical_branch,
+    )
     result = materialize_fresh_personal_holdout_r1(
         snapshot_path=Path(args.snapshot),
         output_dir=Path(args.output),
