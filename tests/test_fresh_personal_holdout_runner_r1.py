@@ -5,6 +5,7 @@ import hashlib
 import pytest
 
 from core.intelligence.curated_real_library_review_contract import CuratedSetRole
+from services.intelligence import fresh_personal_holdout_runner as runner
 from services.intelligence.fresh_personal_holdout_runner import (
     FreshPersonalHoldoutRunnerError,
     _case_spec_pool,
@@ -61,6 +62,48 @@ def test_case_pool_changes_with_seed() -> None:
 def test_case_pool_requires_bounded_minimum_library() -> None:
     with pytest.raises(FreshPersonalHoldoutRunnerError, match="at least 17 tracks"):
         _case_spec_pool(_snapshot(16), sampling_seed="seed")
+
+
+def test_candidate_analysis_isolates_one_case_mir_failure(monkeypatch) -> None:
+    selection = {
+        "schema": "applaylist-curated-case-selection-r1",
+        "snapshot_ref": ["snapshot-fresh", "local-library-subset-r1"],
+        "generator_version": "fresh-personal-holdout-runner-r1",
+        "sampling_seed": "seed",
+        "case_specs": [
+            {
+                "case_spec_id": "case-bad",
+                "set_role": "opening",
+                "seed_track_id": "trk-bad",
+                "candidate_scope_track_ids": ["trk-x"],
+            },
+            {
+                "case_spec_id": "case-good",
+                "set_role": "opening",
+                "seed_track_id": "trk-good",
+                "candidate_scope_track_ids": ["trk-y"],
+            },
+        ],
+    }
+
+    def fake_analyze_real_tracks(*, snapshot_raw, selection_raw):
+        del snapshot_raw
+        case_id = selection_raw["case_specs"][0]["case_spec_id"]
+        if case_id == "case-bad":
+            raise runner.RealLibraryPilotError("unreadable candidate audio")
+        return {"trk-good": object()}
+
+    monkeypatch.setattr(runner, "analyze_real_tracks", fake_analyze_real_tracks)
+    evidence_by_case, merged, failures = runner._analyze_candidate_pool(
+        snapshot_raw={},
+        selection_raw=selection,
+    )
+
+    assert "case-bad" not in evidence_by_case
+    assert evidence_by_case["case-good"] == {"trk-good": merged["trk-good"]}
+    assert len(failures) == 1
+    assert failures[0]["case_id"] == "case-bad"
+    assert failures[0]["technical_invalidity_reason"] == "analysis_failed"
 
 
 def test_review_csv_contains_only_curation_fields_and_empty_human_labels(tmp_path) -> None:
