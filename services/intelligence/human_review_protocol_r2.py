@@ -14,6 +14,7 @@ from core.intelligence.curated_real_library_review_contract import (
     CuratedSetRole,
 )
 from core.intelligence.human_review_preregistration_r2_contract import (
+    CurationCalibrationBindingR3,
     CurationCleanAttestationR2,
     HoldoutReplacementPolicyR2,
 )
@@ -146,8 +147,8 @@ def select_holdout_cases_r2(
     fallback: list[str] = []
     selected_by_role: dict[CuratedSetRole, int] = {role: 0 for role in quotas}
     ledger: list[HoldoutSelectionEntry] = []
-
     pending_eligible: list[tuple[int, HoldoutCandidate]] = []
+
     for ordinal, candidate in enumerate(ordered):
         if not candidate.technically_eligible:
             reason = candidate.technical_invalidity_reason or "engineering_acceptance_failed"
@@ -341,6 +342,31 @@ def _validate_attestation(
     return attestation.clean_sequence_only
 
 
+def build_curation_calibration_binding_r3(
+    *,
+    case_binding: CurationCalibrationCaseR3,
+    review: CurationReviewR2,
+    attestation: CurationCleanAttestationR2,
+) -> CurationCalibrationBindingR3:
+    _validate_attestation(review=review, attestation=attestation)
+    payload = {
+        "case_id": case_binding.case.case_id,
+        "review_id": review.review_id,
+        "curation_session_id": review.curation_session_id,
+        "attestation_fingerprint": curation_clean_attestation_fingerprint(attestation),
+        "selection_manifest_fingerprint": case_binding.selection_manifest_fingerprint,
+    }
+    return CurationCalibrationBindingR3(
+        binding_id=_fingerprint("curation-calibration-binding-r3", payload),
+        case_id=case_binding.case.case_id,
+        review_id=review.review_id,
+        curation_session_id=review.curation_session_id,
+        attestation_fingerprint=payload["attestation_fingerprint"],
+        selection_manifest_fingerprint=case_binding.selection_manifest_fingerprint,
+        activation_authorized=False,
+    )
+
+
 def calibrate_curation_case_r3(
     *,
     case_binding: CurationCalibrationCaseR3,
@@ -437,6 +463,7 @@ def wilson_interval(successes: int, total: int, *, z: float = 1.959963984540054)
 def build_curation_calibration_report_r3(
     *,
     case_evidence: tuple[CurationCalibrationEvidenceR3, ...],
+    calibration_bindings: tuple[CurationCalibrationBindingR3, ...],
     selection: HoldoutSelectionResult,
     replacement_policy: HoldoutReplacementPolicyR2,
     preregistration_manifest_fingerprint: str,
@@ -457,11 +484,25 @@ def build_curation_calibration_report_r3(
         raise HumanReviewProtocolR2Error("replacement policy does not bind to preregistration manifest")
 
     evidence = tuple(sorted(case_evidence, key=lambda item: (item.case_id, item.review_id)))
+    bindings = tuple(sorted(calibration_bindings, key=lambda item: (item.case_id, item.review_id)))
     if not evidence:
         raise HumanReviewProtocolR2Error("curation calibration requires evidence")
     review_ids = [item.review_id for item in evidence]
     if len(set(review_ids)) != len(review_ids):
         raise HumanReviewProtocolR2Error("duplicate curation review identity")
+    binding_review_ids = [item.review_id for item in bindings]
+    if len(set(binding_review_ids)) != len(binding_review_ids):
+        raise HumanReviewProtocolR2Error("duplicate curation calibration binding review identity")
+
+    binding_by_review = {item.review_id: item for item in bindings}
+    if set(binding_by_review) != set(review_ids):
+        raise HumanReviewProtocolR2Error("curation calibration bindings must cover evidence exactly")
+    for item in evidence:
+        binding = binding_by_review[item.review_id]
+        if binding.case_id != item.case_id:
+            raise HumanReviewProtocolR2Error("calibration binding case_id mismatches case evidence")
+        if binding.selection_manifest_fingerprint != selection.manifest_fingerprint:
+            raise HumanReviewProtocolR2Error("calibration binding does not bind to frozen holdout selection")
 
     clean = tuple(
         item
@@ -566,6 +607,7 @@ def build_curation_calibration_report_r3(
         "selected_case_ids": sorted(selection.selected_case_ids),
         "replacement_policy_fingerprint": holdout_replacement_policy_fingerprint(replacement_policy),
         "preregistration_manifest_fingerprint": preregistration_fingerprint,
+        "calibration_bindings": [asdict(item) for item in bindings],
         "clean_case_evidence": [
             {
                 "case_id": item.case_id,
@@ -611,6 +653,7 @@ def build_curation_calibration_report_r3(
 
 __all__ = [
     "HumanReviewProtocolR2Error",
+    "build_curation_calibration_binding_r3",
     "build_curation_calibration_report_r3",
     "calibrate_curation_case_r3",
     "curation_clean_attestation_fingerprint",
