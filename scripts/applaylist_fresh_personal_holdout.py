@@ -26,6 +26,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--generated-at", required=True)
     parser.add_argument("--sampling-seed", required=True)
     parser.add_argument("--blinding-seed", required=True)
+    parser.add_argument(
+        "--exclude-reviewer-packet",
+        action="append",
+        required=True,
+        help="Prior blinded reviewer packet to exclude from fresh holdout exposure; repeatable.",
+    )
     parser.add_argument("--cases-per-role", type=int, default=8)
     parser.add_argument("--candidate-scope-size", type=int, default=16)
     parser.add_argument("--fallback-count", type=int, default=12)
@@ -90,7 +96,10 @@ def main() -> int:
         candidate_scope_size=args.candidate_scope_size,
         fallback_count=args.fallback_count,
     )
-    result = finalize_fresh_holdout_reviewer_workspace(result)
+    result = finalize_fresh_holdout_reviewer_workspace(
+        result,
+        prior_reviewer_packet_paths=tuple(args.exclude_reviewer_packet),
+    )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
