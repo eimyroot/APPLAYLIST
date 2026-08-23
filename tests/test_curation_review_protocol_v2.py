@@ -18,6 +18,11 @@ from core.intelligence.curated_real_library_review_contract import (
     ReviewPlanStrategy,
     ReviewableSetPlan,
 )
+from core.intelligence.curation_holdout_guard_contract import (
+    DevelopmentEvidenceExclusionRegistry,
+    HoldoutSelectionBasis,
+    HoldoutSelectionInput,
+)
 from core.intelligence.curation_review_v2_contract import (
     CURATION_AUDITION_MODE,
     HOLDOUT_VALIDATION_MANIFEST_VERSION,
@@ -35,6 +40,9 @@ from core.intelligence.curation_review_v2_contract import (
     SelectionScope,
 )
 from core.intelligence.human_preference_calibration_contract import CalibrationVerdict
+from services.intelligence.curation_holdout_guard_v1 import (
+    build_counterbalanced_assignment_batch,
+)
 from services.intelligence.curation_preference_calibration_v3 import (
     CurationPreferenceCalibrationV3Error,
     build_curation_calibration_report_v3,
@@ -49,6 +57,8 @@ from services.intelligence.curation_review_execution_v2 import (
 )
 
 ROLES = tuple(CuratedSetRole)
+HOLDOUT_PRIVATE_SEED = "synthetic-holdout-assignment-private-seed"
+HOLDOUT_GENERATED_AT = "2026-08-23T06:00:00Z"
 
 
 def _plan(case_index: int, strategy: ReviewPlanStrategy) -> ReviewableSetPlan:
@@ -215,6 +225,37 @@ def _submission(packet: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _selection_basis(
+    scope: SelectionScope = SelectionScope.REPRESENTATIVE_HOLDOUT,
+) -> HoldoutSelectionBasis:
+    return HoldoutSelectionBasis(
+        basis_id="selection",
+        basis_version="1",
+        selection_scope=scope,
+        selection_inputs=(
+            HoldoutSelectionInput.SOURCE_LIBRARY_ELIGIBILITY,
+            HoldoutSelectionInput.SET_ROLE,
+            HoldoutSelectionInput.DETERMINISTIC_SEED,
+            HoldoutSelectionInput.BPM_STRATUM,
+            HoldoutSelectionInput.STYLE_STRATUM,
+            HoldoutSelectionInput.ENERGY_STRATUM,
+        ),
+        evidence_refs=("selection-policy-evidence",),
+    )
+
+
+def _development_registry() -> DevelopmentEvidenceExclusionRegistry:
+    return DevelopmentEvidenceExclusionRegistry(
+        registry_id="prior-development-r2",
+        registry_version="1",
+        case_ids=tuple(f"legacy-development-case-{index:02d}" for index in range(1, 13)),
+        scenario_fingerprints=tuple(
+            f"legacy-development-scenario-{index:02d}" for index in range(1, 13)
+        ),
+        evidence_refs=("legacy-development-registry-evidence",),
+    )
+
+
 def _holdout_manifest(cases: tuple[CuratedReviewCase, ...], *, scope: SelectionScope = SelectionScope.REPRESENTATIVE_HOLDOUT) -> HoldoutValidationManifest:
     return HoldoutValidationManifest(
         holdout_id="holdout-01",
@@ -237,6 +278,26 @@ def _holdout_manifest(cases: tuple[CuratedReviewCase, ...], *, scope: SelectionS
         human_labels_available_at_freeze=False,
         algorithm_identity_hidden=True,
     )
+
+
+def _holdout_assignments(cases: tuple[CuratedReviewCase, ...]):
+    return build_counterbalanced_assignment_batch(
+        cases=cases,
+        reviewer_refs=("dj-01",),
+        private_seed=HOLDOUT_PRIVATE_SEED,
+        generated_at=HOLDOUT_GENERATED_AT,
+    )
+
+
+def _holdout_guard_kwargs(cases: tuple[CuratedReviewCase, ...], *, scope: SelectionScope = SelectionScope.REPRESENTATIVE_HOLDOUT) -> dict[str, object]:
+    assignments, assignment_manifest = _holdout_assignments(cases)
+    return {
+        "assignments": assignments,
+        "development_exclusion_registry": _development_registry(),
+        "selection_basis": _selection_basis(scope),
+        "assignment_batch_manifest": assignment_manifest,
+        "assignment_private_seed": HOLDOUT_PRIVATE_SEED,
+    }
 
 
 def test_v2_packet_rejects_legacy_bundle63_submission_schema() -> None:
@@ -382,13 +443,113 @@ def test_human_review_cannot_be_attached_to_non_reviewable_machine_outcome() -> 
         )
 
 
+def test_holdout_requires_all_guard_artifacts() -> None:
+    cases = _cases()
+    manifest = _holdout_manifest(cases)
+    with pytest.raises(CurationPreferenceCalibrationV3Error, match="requires development exclusion"):
+        build_curation_calibration_report_v3(
+            all_cases=cases,
+            assignments=(),
+            reviews=(),
+            comparisons_by_case={},
+            system_outcomes=tuple(_outcome(case) for case in cases),
+            evidence_role=EvidenceRole.HOLDOUT_VALIDATION,
+            evaluation_scope=EvaluationScope.PERSONAL_DJ_CALIBRATION,
+            holdout_manifest=manifest,
+            expected_source_optimizer_sha="source-sha",
+            expected_challenger_sha="challenger-sha",
+            expected_challenger_config_digest="challenger-config",
+            expected_calibration_policy_digest="calibration-policy",
+        )
+
+
+def test_holdout_rejects_prior_development_case_overlap() -> None:
+    cases = _cases()
+    manifest = _holdout_manifest(cases)
+    assignments, assignment_manifest = _holdout_assignments(cases)
+    reviews = tuple(
+        _review(assignment, role=EvidenceRole.HOLDOUT_VALIDATION) for assignment in assignments
+    )
+    registry = DevelopmentEvidenceExclusionRegistry(
+        registry_id="development-overlap",
+        registry_version="1",
+        case_ids=tuple(case.case_id for case in cases),
+        scenario_fingerprints=tuple(f"other-{index}" for index in range(12)),
+        evidence_refs=("development-overlap-evidence",),
+    )
+
+    with pytest.raises(CurationPreferenceCalibrationV3Error, match="prior development case identity"):
+        build_curation_calibration_report_v3(
+            all_cases=cases,
+            assignments=assignments,
+            reviews=reviews,
+            comparisons_by_case={case.case_id: _comparison(case) for case in cases},
+            system_outcomes=tuple(_outcome(case) for case in cases),
+            evidence_role=EvidenceRole.HOLDOUT_VALIDATION,
+            evaluation_scope=EvaluationScope.PERSONAL_DJ_CALIBRATION,
+            holdout_manifest=manifest,
+            development_exclusion_registry=registry,
+            selection_basis=_selection_basis(),
+            assignment_batch_manifest=assignment_manifest,
+            assignment_private_seed=HOLDOUT_PRIVATE_SEED,
+            expected_source_optimizer_sha="source-sha",
+            expected_challenger_sha="challenger-sha",
+            expected_challenger_config_digest="challenger-config",
+            expected_calibration_policy_digest="calibration-policy",
+        )
+
+
+def test_representative_selection_basis_rejects_challenger_dependent_inputs() -> None:
+    with pytest.raises(ValueError, match="cannot depend on model outcomes"):
+        HoldoutSelectionBasis(
+            basis_id="selection",
+            basis_version="1",
+            selection_scope=SelectionScope.REPRESENTATIVE_HOLDOUT,
+            selection_inputs=(
+                HoldoutSelectionInput.DETERMINISTIC_SEED,
+                HoldoutSelectionInput.SET_ROLE,
+                HoldoutSelectionInput.CHALLENGER_SCORE,
+            ),
+            evidence_refs=("selection-evidence",),
+        )
+
+
+def test_diagnostic_selection_basis_may_use_challenger_dependent_inputs() -> None:
+    basis = HoldoutSelectionBasis(
+        basis_id="selection-diagnostic",
+        basis_version="1",
+        selection_scope=SelectionScope.DIAGNOSTIC_CHALLENGE_SET,
+        selection_inputs=(
+            HoldoutSelectionInput.DETERMINISTIC_SEED,
+            HoldoutSelectionInput.CHALLENGER_PREFERENCE,
+            HoldoutSelectionInput.SOURCE_CHALLENGER_DISAGREEMENT,
+            HoldoutSelectionInput.FAILURE_CLASS,
+        ),
+        evidence_refs=("selection-evidence",),
+    )
+    assert basis.selection_scope is SelectionScope.DIAGNOSTIC_CHALLENGE_SET
+
+
+def test_counterbalanced_assignment_builder_balances_personal_slots() -> None:
+    cases = _cases()
+    assignments, _ = _holdout_assignments(cases)
+    greedy_in_a = sum(
+        assignment.slot_a_plan_id
+        == next(case.greedy_plan.plan_id for case in cases if case.case_id == assignment.case_id)
+        for assignment in assignments
+    )
+    assert len(assignments) == 12
+    assert greedy_in_a == 6
+
+
 def test_holdout_freeze_rejects_post_label_challenger_mutation() -> None:
     cases = _cases()
     manifest = _holdout_manifest(cases)
-    assignments = tuple(_assignment(case, "dj-01", index) for index, case in enumerate(cases, 1))
+    guard = _holdout_guard_kwargs(cases)
+    assignments = guard.pop("assignments")
+    assert isinstance(assignments, tuple)
     reviews = tuple(
-        replace(_review(assignment), evidence_role=EvidenceRole.HOLDOUT_VALIDATION)
-        for assignment in assignments
+        _review(assignment, role=EvidenceRole.HOLDOUT_VALIDATION) for assignment in assignments
     )
     comparisons = {case.case_id: _comparison(case) for case in cases}
     outcomes = tuple(_outcome(case) for case in cases)
@@ -403,8 +564,38 @@ def test_holdout_freeze_rejects_post_label_challenger_mutation() -> None:
             evidence_role=EvidenceRole.HOLDOUT_VALIDATION,
             evaluation_scope=EvaluationScope.PERSONAL_DJ_CALIBRATION,
             holdout_manifest=manifest,
+            **guard,
             expected_source_optimizer_sha="source-sha",
             expected_challenger_sha="changed-after-labels",
+            expected_challenger_config_digest="challenger-config",
+            expected_calibration_policy_digest="calibration-policy",
+        )
+
+
+def test_holdout_rejects_assignment_private_seed_mismatch() -> None:
+    cases = _cases()
+    manifest = _holdout_manifest(cases)
+    guard = _holdout_guard_kwargs(cases)
+    assignments = guard.pop("assignments")
+    assert isinstance(assignments, tuple)
+    reviews = tuple(
+        _review(assignment, role=EvidenceRole.HOLDOUT_VALIDATION) for assignment in assignments
+    )
+    guard["assignment_private_seed"] = "wrong-private-seed"
+
+    with pytest.raises(CurationPreferenceCalibrationV3Error, match="assignment seed commitment mismatch"):
+        build_curation_calibration_report_v3(
+            all_cases=cases,
+            assignments=assignments,
+            reviews=reviews,
+            comparisons_by_case={case.case_id: _comparison(case) for case in cases},
+            system_outcomes=tuple(_outcome(case) for case in cases),
+            evidence_role=EvidenceRole.HOLDOUT_VALIDATION,
+            evaluation_scope=EvaluationScope.PERSONAL_DJ_CALIBRATION,
+            holdout_manifest=manifest,
+            **guard,
+            expected_source_optimizer_sha="source-sha",
+            expected_challenger_sha="challenger-sha",
             expected_challenger_config_digest="challenger-config",
             expected_calibration_policy_digest="calibration-policy",
         )
@@ -413,10 +604,11 @@ def test_holdout_freeze_rejects_post_label_challenger_mutation() -> None:
 def test_representative_holdout_can_claim_only_protocol_bounded_independent_validation() -> None:
     cases = _cases()
     manifest = _holdout_manifest(cases)
-    assignments = tuple(_assignment(case, "dj-01", index) for index, case in enumerate(cases, 1))
+    guard = _holdout_guard_kwargs(cases)
+    assignments = guard.pop("assignments")
+    assert isinstance(assignments, tuple)
     reviews = tuple(
-        replace(_review(assignment), evidence_role=EvidenceRole.HOLDOUT_VALIDATION)
-        for assignment in assignments
+        _review(assignment, role=EvidenceRole.HOLDOUT_VALIDATION) for assignment in assignments
     )
     comparisons = {case.case_id: _comparison(case) for case in cases}
     outcomes = tuple(_outcome(case) for case in cases)
@@ -430,6 +622,7 @@ def test_representative_holdout_can_claim_only_protocol_bounded_independent_vali
         evidence_role=EvidenceRole.HOLDOUT_VALIDATION,
         evaluation_scope=EvaluationScope.PERSONAL_DJ_CALIBRATION,
         holdout_manifest=manifest,
+        **guard,
         expected_source_optimizer_sha="source-sha",
         expected_challenger_sha="challenger-sha",
         expected_challenger_config_digest="challenger-config",
@@ -443,10 +636,11 @@ def test_representative_holdout_can_claim_only_protocol_bounded_independent_vali
 def test_diagnostic_holdout_never_allows_representative_performance_claim() -> None:
     cases = _cases()
     manifest = _holdout_manifest(cases, scope=SelectionScope.DIAGNOSTIC_CHALLENGE_SET)
-    assignments = tuple(_assignment(case, "dj-01", index) for index, case in enumerate(cases, 1))
+    guard = _holdout_guard_kwargs(cases, scope=SelectionScope.DIAGNOSTIC_CHALLENGE_SET)
+    assignments = guard.pop("assignments")
+    assert isinstance(assignments, tuple)
     reviews = tuple(
-        replace(_review(assignment), evidence_role=EvidenceRole.HOLDOUT_VALIDATION)
-        for assignment in assignments
+        _review(assignment, role=EvidenceRole.HOLDOUT_VALIDATION) for assignment in assignments
     )
     comparisons = {case.case_id: _comparison(case) for case in cases}
     outcomes = tuple(_outcome(case) for case in cases)
@@ -460,6 +654,7 @@ def test_diagnostic_holdout_never_allows_representative_performance_claim() -> N
         evidence_role=EvidenceRole.HOLDOUT_VALIDATION,
         evaluation_scope=EvaluationScope.PERSONAL_DJ_CALIBRATION,
         holdout_manifest=manifest,
+        **guard,
         expected_source_optimizer_sha="source-sha",
         expected_challenger_sha="challenger-sha",
         expected_challenger_config_digest="challenger-config",
