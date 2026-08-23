@@ -4,6 +4,7 @@ import argparse
 import json
 import subprocess
 from pathlib import Path
+from typing import Mapping
 
 from services.intelligence.fresh_holdout_reviewer_workspace import (
     finalize_fresh_holdout_reviewer_workspace,
@@ -87,6 +88,26 @@ def verify_canonical_checkout(*, canonical_sha: str, canonical_branch: str) -> N
         )
 
 
+def verify_r1_fixed_effective_cohort(result: Mapping[str, str]) -> None:
+    """R1 publishes only a cohort with no replacement events already applied.
+
+    Once the reviewer workspace is finalized, later technical invalidity must abort and
+    restart the run rather than silently swap in a fallback during human review.
+    """
+    private_path = Path(str(result.get("private_manifest", "")).strip())
+    if not private_path.is_file():
+        raise FreshPersonalHoldoutRunnerError("fresh holdout private manifest is missing")
+    raw = json.loads(private_path.read_text(encoding="utf-8"))
+    cohort = raw.get("effective_cohort") if isinstance(raw, dict) else None
+    if not isinstance(cohort, dict):
+        raise FreshPersonalHoldoutRunnerError("fresh holdout effective cohort is missing")
+    events = cohort.get("replacement_events")
+    if events not in ([], ()):
+        raise FreshPersonalHoldoutRunnerError(
+            "Fresh Personal Holdout R1 requires zero replacement events before review publication"
+        )
+
+
 def main() -> int:
     args = _parser().parse_args()
     verify_canonical_checkout(
@@ -106,6 +127,7 @@ def main() -> int:
         candidate_scope_size=args.candidate_scope_size,
         fallback_count=args.fallback_count,
     )
+    verify_r1_fixed_effective_cohort(result)
     result = finalize_fresh_holdout_reviewer_workspace(
         result,
         snapshot_path=snapshot_path,
