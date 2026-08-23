@@ -13,6 +13,10 @@ from core.intelligence.curated_real_library_review_contract import (
     ReviewPlanStrategy,
     ReviewableSetPlan,
 )
+from core.intelligence.human_review_preregistration_r2_contract import (
+    CurationCleanAttestationR2,
+    HoldoutReplacementPolicyR2,
+)
 from core.intelligence.human_review_protocol_r2_contract import (
     Assessability,
     CurationCalibrationCaseR3,
@@ -38,13 +42,18 @@ from core.intelligence.human_review_protocol_r2_contract import (
 from services.intelligence.curated_real_library_review import build_blinded_plan_assignment
 from services.intelligence.human_review_protocol_r2 import (
     HumanReviewProtocolR2Error,
+    build_curation_calibration_binding_r3,
     build_curation_calibration_report_r3,
     calibrate_curation_case_r3,
+    curation_clean_attestation_fingerprint,
+    holdout_replacement_policy_fingerprint,
     replacement_case_r2,
     select_holdout_cases_r2,
     transition_review_spec_fingerprint,
     vocal_collision_evidence_r2,
 )
+
+PREREG = "preregistration:synthetic"
 
 
 def _plan(index: int, strategy: ReviewPlanStrategy) -> ReviewableSetPlan:
@@ -128,6 +137,23 @@ def _review(
     )
 
 
+def _attestation(review: CurationReviewR2, **changes) -> CurationCleanAttestationR2:
+    values = {
+        "attestation_id": f"attestation:{review.review_id}",
+        "review_id": review.review_id,
+        "curation_session_id": review.curation_session_id,
+        "observed_at": review.observed_at,
+        "prior_case_exposure": review.prior_case_exposure,
+        "judgment_mode": review.judgment_mode,
+        "transition_execution_used": review.transition_execution_used,
+        "transition_preview_heard": review.transition_preview_heard,
+        "algorithm_identity_was_hidden": review.algorithm_identity_was_hidden,
+        "reason_codes": ("synthetic_test_fixture_only",),
+    }
+    values.update(changes)
+    return CurationCleanAttestationR2(**values)
+
+
 def _comparison(case, target: ResolvedCurationPreference, *, reverse: bool = False):
     left = case.beam_plan.path_id if reverse else case.greedy_plan.path_id
     right = case.greedy_plan.path_id if reverse else case.beam_plan.path_id
@@ -152,43 +178,12 @@ def _comparison(case, target: ResolvedCurationPreference, *, reverse: bool = Fal
     )
 
 
-def _binding(case, dataset_role=ReviewDatasetRole.PERSONAL_HOLDOUT, difference=MeaningfulDifferenceStatus.MEANINGFULLY_DISTINCT):
+def _binding(case, manifest: str, dataset_role=ReviewDatasetRole.PERSONAL_HOLDOUT, difference=MeaningfulDifferenceStatus.MEANINGFULLY_DISTINCT):
     return CurationCalibrationCaseR3(
         case=case,
         dataset_role=dataset_role,
         meaningful_difference_status=difference,
-        selection_manifest_fingerprint="holdout-selection-r2:synthetic",
-    )
-
-
-def _evidence(
-    case,
-    human: ResolvedCurationPreference,
-    *,
-    challenger: ResolvedCurationPreference | None = None,
-    dataset_role=ReviewDatasetRole.PERSONAL_HOLDOUT,
-    exposure=PriorCaseExposure.NO,
-    transition_execution_used=False,
-    transition_preview_heard=False,
-    attested=True,
-    review_id=None,
-):
-    assignment = _assignment(case)
-    return calibrate_curation_case_r3(
-        case_binding=_binding(case, dataset_role=dataset_role),
-        assignment=assignment,
-        review=_review(
-            case,
-            assignment,
-            human,
-            dataset_role=dataset_role,
-            exposure=exposure,
-            transition_execution_used=transition_execution_used,
-            transition_preview_heard=transition_preview_heard,
-            review_id=review_id,
-        ),
-        comparison=_comparison(case, challenger or human),
-        clean_sequence_attestation=attested,
+        selection_manifest_fingerprint=manifest,
     )
 
 
@@ -205,12 +200,11 @@ def _selection(cases: tuple[CuratedReviewCase, ...], *, fallback_extra: int = 0)
         for case in cases
     ]
     for index in range(fallback_extra):
-        role = roles[index % len(roles)]
         candidates.append(
             HoldoutCandidate(
                 candidate_id=f"fallback-candidate:{index}",
                 case_id=f"fallback-case:{index}",
-                set_role=role,
+                set_role=roles[index % len(roles)],
                 engineering_acceptance_passed=True,
             )
         )
@@ -228,11 +222,63 @@ def _selection(cases: tuple[CuratedReviewCase, ...], *, fallback_extra: int = 0)
     return select_holdout_cases_r2(policy=policy, candidates=tuple(candidates))
 
 
-def _report(evidence, selection, policy=None):
+def _replacement_policy(selection, *, prereg: str = PREREG):
+    return HoldoutReplacementPolicyR2(
+        policy_id="synthetic-replacement-policy",
+        selection_manifest_fingerprint=selection.manifest_fingerprint,
+        preregistration_manifest_fingerprint=prereg,
+        frozen_at="2026-08-23T06:59:00Z",
+        allowed_technical_invalidity_reasons=("audio_path_unreadable", "packet_binding_failed"),
+    )
+
+
+def _calibrated(
+    case,
+    selection,
+    human: ResolvedCurationPreference,
+    *,
+    challenger: ResolvedCurationPreference | None = None,
+    dataset_role=ReviewDatasetRole.PERSONAL_HOLDOUT,
+    exposure=PriorCaseExposure.NO,
+    transition_execution_used=False,
+    transition_preview_heard=False,
+    review_id=None,
+):
+    assignment = _assignment(case)
+    review = _review(
+        case,
+        assignment,
+        human,
+        dataset_role=dataset_role,
+        exposure=exposure,
+        transition_execution_used=transition_execution_used,
+        transition_preview_heard=transition_preview_heard,
+        review_id=review_id,
+    )
+    attestation = _attestation(review)
+    case_binding = _binding(case, selection.manifest_fingerprint, dataset_role=dataset_role)
+    evidence = calibrate_curation_case_r3(
+        case_binding=case_binding,
+        assignment=assignment,
+        review=review,
+        attestation=attestation,
+        comparison=_comparison(case, challenger or human),
+    )
+    calibration_binding = build_curation_calibration_binding_r3(
+        case_binding=case_binding,
+        review=review,
+        attestation=attestation,
+    )
+    return evidence, calibration_binding
+
+
+def _report(evidence, bindings, selection, policy=None, replacement_policy=None, prereg=PREREG):
     return build_curation_calibration_report_r3(
         case_evidence=tuple(evidence),
+        calibration_bindings=tuple(bindings),
         selection=selection,
-        preregistration_manifest_fingerprint="preregistration:synthetic",
+        replacement_policy=replacement_policy or _replacement_policy(selection, prereg=prereg),
+        preregistration_manifest_fingerprint=prereg,
         policy=policy or CurationCalibrationPolicyR3(),
     )
 
@@ -258,27 +304,59 @@ def test_r1_six_dimension_ratings_cannot_masquerade_as_r2() -> None:
         )
 
 
-def test_explicit_attestation_is_required_for_clean_metrics() -> None:
+def test_attestation_is_immutable_bound_evidence_not_loose_boolean() -> None:
     case = _case(1, CuratedSetRole.BUILD)
-    evidence = _evidence(case, ResolvedCurationPreference.GREEDY, attested=False)
-    assert evidence.clean_holdout_eligible is False
-    assert evidence.exact_agreement is None
-    assert "explicit_clean_sequence_attestation_missing" in evidence.reason_codes
+    selection = _selection(_cases())
+    assignment = _assignment(case)
+    review = _review(case, assignment, ResolvedCurationPreference.GREEDY)
+    attestation = _attestation(review)
+    case_binding = _binding(case, selection.manifest_fingerprint)
+    evidence = calibrate_curation_case_r3(
+        case_binding=case_binding,
+        assignment=assignment,
+        review=review,
+        attestation=attestation,
+        comparison=_comparison(case, ResolvedCurationPreference.GREEDY),
+    )
+    binding = build_curation_calibration_binding_r3(
+        case_binding=case_binding,
+        review=review,
+        attestation=attestation,
+    )
+    assert evidence.clean_holdout_eligible is True
+    assert binding.attestation_fingerprint == curation_clean_attestation_fingerprint(attestation)
+    assert binding.selection_manifest_fingerprint == selection.manifest_fingerprint
 
 
-def test_manual_mix_or_prior_case_exposure_is_preserved_but_excluded() -> None:
+def test_attestation_mismatch_fails_closed() -> None:
     case = _case(2, CuratedSetRole.MID_SET)
-    mixed = _evidence(case, ResolvedCurationPreference.BEAM, transition_execution_used=True)
-    exposed = _evidence(case, ResolvedCurationPreference.BEAM, exposure=PriorCaseExposure.YES)
+    selection = _selection(_cases())
+    assignment = _assignment(case)
+    review = _review(case, assignment, ResolvedCurationPreference.BEAM)
+    with pytest.raises(HumanReviewProtocolR2Error, match="review_id"):
+        calibrate_curation_case_r3(
+            case_binding=_binding(case, selection.manifest_fingerprint),
+            assignment=assignment,
+            review=review,
+            attestation=_attestation(review, review_id="foreign-review"),
+            comparison=_comparison(case, ResolvedCurationPreference.BEAM),
+        )
+
+
+def test_manual_mix_or_prior_exposure_attestation_is_preserved_but_not_clean() -> None:
+    cases = _cases()
+    selection = _selection(cases)
+    mixed, _ = _calibrated(cases[0], selection, ResolvedCurationPreference.GREEDY, transition_execution_used=True)
+    exposed, _ = _calibrated(cases[1], selection, ResolvedCurationPreference.GREEDY, exposure=PriorCaseExposure.YES)
     assert mixed.clean_holdout_eligible is False
     assert exposed.clean_holdout_eligible is False
 
 
 def test_development_regression_case_cannot_count_as_holdout() -> None:
-    case = _case(3, CuratedSetRole.PEAK)
-    evidence = _evidence(
-        case,
-        ResolvedCurationPreference.GREEDY,
+    cases = _cases()
+    selection = _selection(cases)
+    evidence, _ = _calibrated(
+        cases[0], selection, ResolvedCurationPreference.GREEDY,
         dataset_role=ReviewDatasetRole.DEVELOPMENT_REGRESSION,
     )
     assert evidence.clean_holdout_eligible is False
@@ -286,60 +364,42 @@ def test_development_regression_case_cannot_count_as_holdout() -> None:
 
 
 def test_blind_slot_inversion_resolves_to_source_strategy() -> None:
-    case = _case(4, CuratedSetRole.RESET)
+    case = _case(40, CuratedSetRole.RESET)
+    selection = _selection(_cases())
     assignment = _assignment(case, seed="reverse-seed")
+    review = _review(case, assignment, ResolvedCurationPreference.BEAM)
     evidence = calibrate_curation_case_r3(
-        case_binding=_binding(case),
+        case_binding=_binding(case, selection.manifest_fingerprint),
         assignment=assignment,
-        review=_review(case, assignment, ResolvedCurationPreference.BEAM),
+        review=review,
+        attestation=_attestation(review),
         comparison=_comparison(case, ResolvedCurationPreference.BEAM, reverse=True),
-        clean_sequence_attestation=True,
     )
     assert evidence.human_preference is ResolvedCurationPreference.BEAM
     assert evidence.challenger_preference is ResolvedCurationPreference.BEAM
-    assert evidence.exact_agreement is True
 
 
-def test_dimension_arithmetic_does_not_rewrite_explicit_preference() -> None:
-    case = _case(5, CuratedSetRole.CLOSING)
-    evidence = _evidence(case, ResolvedCurationPreference.BEAM)
+def test_dimension_arithmetic_never_rewrites_explicit_preference() -> None:
+    cases = _cases()
+    selection = _selection(cases)
+    evidence, _ = _calibrated(cases[0], selection, ResolvedCurationPreference.BEAM)
     assert evidence.human_preference is ResolvedCurationPreference.BEAM
 
 
-def test_shadow_path_identity_mismatch_fails_closed() -> None:
-    case = _case(6, CuratedSetRole.OPENING)
-    assignment = _assignment(case)
-    invalid = replace(_comparison(case, ResolvedCurationPreference.GREEDY), right_path_id="foreign")
-    with pytest.raises(HumanReviewProtocolR2Error, match="source paths"):
-        calibrate_curation_case_r3(
-            case_binding=_binding(case),
-            assignment=assignment,
-            review=_review(case, assignment, ResolvedCurationPreference.GREEDY),
-            comparison=invalid,
-            clean_sequence_attestation=True,
-        )
-
-
-def test_holdout_selection_is_deterministic_and_input_order_independent() -> None:
+def test_holdout_selection_is_deterministic_and_order_independent() -> None:
     cases = _cases()
     first = _selection(cases, fallback_extra=6)
     roles = tuple(CuratedSetRole)
     candidates = tuple(
         HoldoutCandidate(
-            candidate_id=f"candidate:{case.case_id}",
-            case_id=case.case_id,
-            set_role=case.set_role,
-            engineering_acceptance_passed=True,
-        )
-        for case in cases
+            candidate_id=f"candidate:{case.case_id}", case_id=case.case_id,
+            set_role=case.set_role, engineering_acceptance_passed=True,
+        ) for case in cases
     ) + tuple(
         HoldoutCandidate(
-            candidate_id=f"fallback-candidate:{index}",
-            case_id=f"fallback-case:{index}",
-            set_role=roles[index % len(roles)],
-            engineering_acceptance_passed=True,
-        )
-        for index in range(6)
+            candidate_id=f"fallback-candidate:{i}", case_id=f"fallback-case:{i}",
+            set_role=roles[i % len(roles)], engineering_acceptance_passed=True,
+        ) for i in range(6)
     )
     policy = HoldoutCaseSamplingPolicy(
         policy_id="synthetic-holdout",
@@ -357,127 +417,118 @@ def test_holdout_selection_is_deterministic_and_input_order_independent() -> Non
     assert len(first.selected_case_ids) == 24
 
 
-def test_replacement_requires_pre_registered_technical_reason_and_frozen_order() -> None:
+def test_replacement_policy_is_frozen_and_bound_to_selection() -> None:
     cases = _cases()
     selection = _selection(cases, fallback_extra=6)
-    selected = selection.selected_case_ids[0]
+    policy = _replacement_policy(selection)
     first = replacement_case_r2(
         selection=selection,
-        invalid_case_id=selected,
+        replacement_policy=policy,
+        invalid_case_id=selection.selected_case_ids[0],
         technical_invalidity_reason="audio_path_unreadable",
-        allowed_technical_invalidity_reasons=("audio_path_unreadable", "packet_binding_failed"),
     )
     assert first == selection.fallback_case_ids[0]
-    with pytest.raises(HumanReviewProtocolR2Error, match="outside pre-registered"):
+    assert holdout_replacement_policy_fingerprint(policy).startswith("holdout-replacement-policy-r2:")
+    wrong = replace(policy, selection_manifest_fingerprint="foreign-selection")
+    with pytest.raises(HumanReviewProtocolR2Error, match="does not bind"):
         replacement_case_r2(
             selection=selection,
-            invalid_case_id=selected,
-            technical_invalidity_reason="human_preference_disliked_case",
-            allowed_technical_invalidity_reasons=("audio_path_unreadable",),
+            replacement_policy=wrong,
+            invalid_case_id=selection.selected_case_ids[0],
+            technical_invalidity_reason="audio_path_unreadable",
+        )
+    with pytest.raises(HumanReviewProtocolR2Error, match="outside frozen pre-registered"):
+        replacement_case_r2(
+            selection=selection,
+            replacement_policy=policy,
+            invalid_case_id=selection.selected_case_ids[0],
+            technical_invalidity_reason="unregistered_reason",
         )
 
 
-def test_transition_spec_fingerprint_binds_mix_window() -> None:
+def test_transition_spec_binding_and_missing_vocal_evidence() -> None:
     spec = TransitionReviewSpecR2(
-        spec_id="spec-1",
-        outgoing_track_id="track-a",
-        incoming_track_id="track-b",
-        outgoing_segment_id="segment-a",
-        incoming_segment_id="segment-b",
-        outgoing_analysis_revision="analysis-a",
-        incoming_analysis_revision="analysis-b",
-        outgoing_evidence_fingerprint="evidence-a",
-        incoming_evidence_fingerprint="evidence-b",
-        outgoing_window_seconds=(180.0, 210.0),
-        incoming_window_seconds=(30.0, 60.0),
-        duration_seconds=30.0,
-        strategy_id="eq-blend",
-        strategy_version="1",
-        evidence_refs=("transition:evidence",),
-        target_bpm=130.0,
-        duration_bars=16.0,
+        spec_id="spec-1", outgoing_track_id="track-a", incoming_track_id="track-b",
+        outgoing_segment_id="segment-a", incoming_segment_id="segment-b",
+        outgoing_analysis_revision="analysis-a", incoming_analysis_revision="analysis-b",
+        outgoing_evidence_fingerprint="evidence-a", incoming_evidence_fingerprint="evidence-b",
+        outgoing_window_seconds=(180.0, 210.0), incoming_window_seconds=(30.0, 60.0),
+        duration_seconds=30.0, strategy_id="eq-blend", strategy_version="1",
+        evidence_refs=("transition:evidence",), target_bpm=130.0, duration_bars=16.0,
         beat_grid_revision="grid-r1",
     )
     assert transition_review_spec_fingerprint(spec) != transition_review_spec_fingerprint(
         replace(spec, outgoing_window_seconds=(181.0, 211.0))
     )
-
-
-def test_missing_vocal_evidence_is_not_assessable_and_tempo_harmony_are_separate() -> None:
     vocal = vocal_collision_evidence_r2(value=None, explicit_vocal_evidence_refs=())
+    assert vocal.assessability is Assessability.NOT_ASSESSABLE
+    assert vocal.reason_code == "explicit_vocal_evidence_missing"
+
+
+def test_tempo_harmony_are_distinct_and_audition_requires_bound_execution() -> None:
     tempo = TransitionDimensionEvidenceR2(
         dimension=TransitionFeasibilityDimension.TEMPO_FEASIBILITY,
-        assessability=Assessability.ASSESSABLE,
-        value=0.9,
-        reason_code=None,
+        assessability=Assessability.ASSESSABLE, value=0.9, reason_code=None,
         evidence_refs=("tempo:evidence",),
     )
     harmonic = TransitionDimensionEvidenceR2(
         dimension=TransitionFeasibilityDimension.HARMONIC_COMPATIBILITY,
-        assessability=Assessability.ASSESSABLE,
-        value=0.2,
-        reason_code=None,
+        assessability=Assessability.ASSESSABLE, value=0.2, reason_code=None,
         evidence_refs=("key:evidence",),
     )
-    assert vocal.assessability is Assessability.NOT_ASSESSABLE
-    assert vocal.reason_code == "explicit_vocal_evidence_missing"
     assert tempo.dimension is not harmonic.dimension
-
-
-def test_human_audition_requires_render_or_standardized_recipe() -> None:
     with pytest.raises(ValueError, match="rendered preview or standardized recipe"):
         HumanTransitionAuditionReviewR2(
-            review_id="transition-review",
-            transition_spec_fingerprint="spec:fingerprint",
-            reviewer_ref="reviewer",
-            observed_at="2026-08-23T07:00:00Z",
+            review_id="transition-review", transition_spec_fingerprint="spec:fingerprint",
+            reviewer_ref="reviewer", observed_at="2026-08-23T07:00:00Z",
         )
     execution = HumanExecutionReviewR2(
-        review_id="execution-review",
-        reviewer_ref="reviewer",
-        execution_session_id="execution-session",
-        observed_at="2026-08-23T07:00:00Z",
+        review_id="execution-review", reviewer_ref="reviewer",
+        execution_session_id="execution-session", observed_at="2026-08-23T07:00:00Z",
         free_form_execution=True,
     )
     assert execution.free_form_execution is True
 
 
-def test_report_is_bound_to_frozen_holdout_selection() -> None:
+def test_report_requires_exact_attestation_bindings_and_frozen_selection() -> None:
     cases = _cases()
     selection = _selection(cases)
-    evidence = tuple(_evidence(case, ResolvedCurationPreference.GREEDY) for case in cases)
-    foreign = _evidence(_case(99, CuratedSetRole.OPENING), ResolvedCurationPreference.GREEDY)
-    with pytest.raises(HumanReviewProtocolR2Error, match="outside frozen holdout"):
-        _report(evidence + (foreign,), selection)
+    pairs = [_calibrated(case, selection, ResolvedCurationPreference.GREEDY) for case in cases]
+    evidence = tuple(item[0] for item in pairs)
+    bindings = tuple(item[1] for item in pairs)
+    report = _report(evidence, bindings, selection)
+    assert report.clean_case_count == 24
+    missing_binding = bindings[:-1]
+    with pytest.raises(HumanReviewProtocolR2Error, match="cover evidence exactly"):
+        _report(evidence, missing_binding, selection)
+    foreign_binding = replace(bindings[0], selection_manifest_fingerprint="foreign-selection")
+    with pytest.raises(HumanReviewProtocolR2Error, match="does not bind"):
+        _report(evidence, (foreign_binding, *bindings[1:]), selection)
 
 
-def test_same_case_cannot_inflate_personal_holdout_n_with_multiple_review_ids() -> None:
+def test_same_case_cannot_inflate_personal_holdout_n() -> None:
     cases = _cases()
     selection = _selection(cases)
-    duplicate_case_a = _evidence(cases[0], ResolvedCurationPreference.GREEDY, review_id="review-a")
-    duplicate_case_b = _evidence(cases[0], ResolvedCurationPreference.GREEDY, review_id="review-b")
+    first = _calibrated(cases[0], selection, ResolvedCurationPreference.GREEDY, review_id="review-a")
+    second = _calibrated(cases[0], selection, ResolvedCurationPreference.GREEDY, review_id="review-b")
     with pytest.raises(HumanReviewProtocolR2Error, match="at most one clean review"):
-        _report((duplicate_case_a, duplicate_case_b), selection)
-
-
-def test_missing_selected_clean_review_keeps_holdout_incomplete() -> None:
-    cases = _cases()
-    selection = _selection(cases)
-    evidence = tuple(_evidence(case, ResolvedCurationPreference.GREEDY) for case in cases[:-1])
-    report = _report(evidence, selection)
-    assert report.verdict is CurationCalibrationVerdict.INCOMPLETE
-    assert "frozen_holdout_cases_missing_clean_review" in report.explanation_codes
+        _report((first[0], second[0]), (first[1], second[1]), selection)
 
 
 def test_complete_clean_personal_holdout_supports_only_further_evaluation() -> None:
     cases = _cases()
     selection = _selection(cases)
-    evidence = tuple(
-        _evidence(case, ResolvedCurationPreference.GREEDY if index % 2 == 0 else ResolvedCurationPreference.BEAM)
+    pairs = [
+        _calibrated(
+            case, selection,
+            ResolvedCurationPreference.GREEDY if index % 2 == 0 else ResolvedCurationPreference.BEAM,
+        )
         for index, case in enumerate(cases)
-    )
-    report = _report(evidence, selection)
-    replay = _report(tuple(reversed(evidence)), selection)
+    ]
+    evidence = tuple(item[0] for item in pairs)
+    bindings = tuple(item[1] for item in pairs)
+    report = _report(evidence, bindings, selection)
+    replay = _report(tuple(reversed(evidence)), tuple(reversed(bindings)), selection)
     assert report == replay
     assert report.clean_case_count == 24
     assert report.exact_agreement_rate == 1.0
@@ -490,21 +541,15 @@ def test_complete_clean_personal_holdout_supports_only_further_evaluation() -> N
 def test_wilson_lower_bound_not_point_estimate_drives_gate() -> None:
     cases = _cases()
     selection = _selection(cases)
-    evidence = tuple(
-        _evidence(
-            case,
-            ResolvedCurationPreference.GREEDY,
-            challenger=(
-                ResolvedCurationPreference.GREEDY
-                if index < 16
-                else ResolvedCurationPreference.BEAM
-            ),
+    pairs = [
+        _calibrated(
+            case, selection, ResolvedCurationPreference.GREEDY,
+            challenger=ResolvedCurationPreference.GREEDY if index < 16 else ResolvedCurationPreference.BEAM,
         )
         for index, case in enumerate(cases)
-    )
+    ]
     report = _report(
-        evidence,
-        selection,
+        tuple(item[0] for item in pairs), tuple(item[1] for item in pairs), selection,
         CurationCalibrationPolicyR3(
             minimum_exact_agreement_lower_bound=0.60,
             minimum_decisive_agreement_lower_bound=0.60,
@@ -519,24 +564,28 @@ def test_wilson_lower_bound_not_point_estimate_drives_gate() -> None:
 def test_general_claim_refuses_personal_independent_row_analyzer() -> None:
     cases = _cases()
     selection = _selection(cases)
-    evidence = tuple(_evidence(case, ResolvedCurationPreference.GREEDY) for case in cases)
+    pairs = [_calibrated(case, selection, ResolvedCurationPreference.GREEDY) for case in cases]
     with pytest.raises(HumanReviewProtocolR2Error, match="cluster-aware analyzer"):
         _report(
-            evidence,
-            selection,
+            tuple(item[0] for item in pairs), tuple(item[1] for item in pairs), selection,
             CurationCalibrationPolicyR3(claim_scope=ValidationClaimScope.GENERAL_DJ_PRODUCT_VALIDATION),
         )
 
 
-def test_near_equivalent_tie_is_preserved_as_diagnostic_product_evidence() -> None:
-    case = _case(40, CuratedSetRole.RESET)
+def test_near_equivalent_tie_is_preserved() -> None:
+    case = _case(50, CuratedSetRole.RESET)
+    selection = _selection(_cases())
     assignment = _assignment(case)
+    review = _review(case, assignment, ResolvedCurationPreference.TIE)
     evidence = calibrate_curation_case_r3(
-        case_binding=_binding(case, difference=MeaningfulDifferenceStatus.NEAR_EQUIVALENT),
+        case_binding=_binding(
+            case, selection.manifest_fingerprint,
+            difference=MeaningfulDifferenceStatus.NEAR_EQUIVALENT,
+        ),
         assignment=assignment,
-        review=_review(case, assignment, ResolvedCurationPreference.TIE),
+        review=review,
+        attestation=_attestation(review),
         comparison=_comparison(case, ResolvedCurationPreference.GREEDY),
-        clean_sequence_attestation=True,
     )
     assert evidence.human_preference is ResolvedCurationPreference.TIE
     assert "near_equivalent_case_report_separately" in evidence.reason_codes
