@@ -9,6 +9,7 @@ from core.intelligence.human_review_protocol_r2_contract import (
 
 HUMAN_REVIEW_PREREGISTRATION_R2_VERSION = "human-review-preregistration-r2"
 HOLDOUT_REPLACEMENT_POLICY_R2_VERSION = "holdout-replacement-policy-r2"
+CURATION_CALIBRATION_BINDING_R3_VERSION = "curation-calibration-binding-r3"
 
 
 def _text(value: str, field: str) -> str:
@@ -82,7 +83,10 @@ class HoldoutReplacementPolicyR2:
             "policy_version",
         ):
             object.__setattr__(self, field, _text(getattr(self, field), field))
-        reasons = tuple(_text(item, "allowed_technical_invalidity_reason") for item in self.allowed_technical_invalidity_reasons)
+        reasons = tuple(
+            _text(item, "allowed_technical_invalidity_reason")
+            for item in self.allowed_technical_invalidity_reasons
+        )
         if not reasons or len(set(reasons)) != len(reasons):
             raise ValueError("allowed technical invalidity reasons must be non-empty and unique")
         forbidden_tokens = (
@@ -102,7 +106,35 @@ class HoldoutReplacementPolicyR2:
             raise ValueError("HoldoutReplacementPolicyR2 cannot authorize activation")
 
 
+@dataclass(frozen=True, slots=True)
+class CurationCalibrationBindingR3:
+    binding_id: str
+    case_id: str
+    review_id: str
+    curation_session_id: str
+    attestation_fingerprint: str
+    selection_manifest_fingerprint: str
+    binding_version: str = CURATION_CALIBRATION_BINDING_R3_VERSION
+    activation_authorized: bool = False
+
+    def __post_init__(self) -> None:
+        for field in (
+            "binding_id",
+            "case_id",
+            "review_id",
+            "curation_session_id",
+            "attestation_fingerprint",
+            "selection_manifest_fingerprint",
+            "binding_version",
+        ):
+            object.__setattr__(self, field, _text(getattr(self, field), field))
+        if self.activation_authorized:
+            raise ValueError("CurationCalibrationBindingR3 cannot authorize activation")
+
+
 __all__ = [
+    "CURATION_CALIBRATION_BINDING_R3_VERSION",
+    "CurationCalibrationBindingR3",
     "CurationCleanAttestationR2",
     "HOLDOUT_REPLACEMENT_POLICY_R2_VERSION",
     "HUMAN_REVIEW_PREREGISTRATION_R2_VERSION",
