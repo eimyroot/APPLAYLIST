@@ -9,6 +9,7 @@ from core.intelligence.human_review_protocol_r2_contract import (
 
 HUMAN_REVIEW_PREREGISTRATION_R2_VERSION = "human-review-preregistration-r2"
 HOLDOUT_REPLACEMENT_POLICY_R2_VERSION = "holdout-replacement-policy-r2"
+HOLDOUT_EFFECTIVE_COHORT_R2_VERSION = "holdout-effective-cohort-r2"
 CURATION_CALIBRATION_BINDING_R3_VERSION = "curation-calibration-binding-r3"
 
 
@@ -107,6 +108,69 @@ class HoldoutReplacementPolicyR2:
 
 
 @dataclass(frozen=True, slots=True)
+class HoldoutReplacementEventR2:
+    event_id: str
+    invalid_case_id: str
+    replacement_case_id: str
+    technical_invalidity_reason: str
+    fallback_ordinal: int
+    event_version: str = HOLDOUT_EFFECTIVE_COHORT_R2_VERSION
+    activation_authorized: bool = False
+
+    def __post_init__(self) -> None:
+        for field in (
+            "event_id",
+            "invalid_case_id",
+            "replacement_case_id",
+            "technical_invalidity_reason",
+            "event_version",
+        ):
+            object.__setattr__(self, field, _text(getattr(self, field), field))
+        if self.invalid_case_id == self.replacement_case_id:
+            raise ValueError("replacement event requires distinct invalid/replacement case ids")
+        if self.fallback_ordinal < 0:
+            raise ValueError("fallback_ordinal must be non-negative")
+        if self.activation_authorized:
+            raise ValueError("HoldoutReplacementEventR2 cannot authorize activation")
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveHoldoutCohortR2:
+    cohort_id: str
+    selection_manifest_fingerprint: str
+    replacement_policy_fingerprint: str
+    preregistration_manifest_fingerprint: str
+    effective_case_ids: tuple[str, ...]
+    replacement_events: tuple[HoldoutReplacementEventR2, ...]
+    cohort_version: str = HOLDOUT_EFFECTIVE_COHORT_R2_VERSION
+    activation_authorized: bool = False
+
+    def __post_init__(self) -> None:
+        for field in (
+            "cohort_id",
+            "selection_manifest_fingerprint",
+            "replacement_policy_fingerprint",
+            "preregistration_manifest_fingerprint",
+            "cohort_version",
+        ):
+            object.__setattr__(self, field, _text(getattr(self, field), field))
+        cases = tuple(_text(item, "effective_case_id") for item in self.effective_case_ids)
+        if not cases or len(set(cases)) != len(cases):
+            raise ValueError("effective_case_ids must be non-empty and unique")
+        object.__setattr__(self, "effective_case_ids", cases)
+        events = tuple(self.replacement_events)
+        invalid_ids = tuple(item.invalid_case_id for item in events)
+        replacement_ids = tuple(item.replacement_case_id for item in events)
+        if len(set(invalid_ids)) != len(invalid_ids):
+            raise ValueError("invalid holdout case may be replaced at most once")
+        if len(set(replacement_ids)) != len(replacement_ids):
+            raise ValueError("fallback holdout case may be used at most once")
+        object.__setattr__(self, "replacement_events", events)
+        if self.activation_authorized:
+            raise ValueError("EffectiveHoldoutCohortR2 cannot authorize activation")
+
+
+@dataclass(frozen=True, slots=True)
 class CurationCalibrationBindingR3:
     binding_id: str
     case_id: str
@@ -136,7 +200,10 @@ __all__ = [
     "CURATION_CALIBRATION_BINDING_R3_VERSION",
     "CurationCalibrationBindingR3",
     "CurationCleanAttestationR2",
+    "EffectiveHoldoutCohortR2",
+    "HOLDOUT_EFFECTIVE_COHORT_R2_VERSION",
     "HOLDOUT_REPLACEMENT_POLICY_R2_VERSION",
     "HUMAN_REVIEW_PREREGISTRATION_R2_VERSION",
+    "HoldoutReplacementEventR2",
     "HoldoutReplacementPolicyR2",
 ]
