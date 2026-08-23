@@ -9,9 +9,7 @@ from typing import Any, Mapping, Sequence
 
 from core.intelligence.competitive_curation_contract import CompetitiveCurationPolicy
 from core.intelligence.curated_real_library_review_contract import CuratedSetRole
-from core.intelligence.human_review_preregistration_r2_contract import (
-    HoldoutReplacementPolicyR2,
-)
+from core.intelligence.human_review_preregistration_r2_contract import HoldoutReplacementPolicyR2
 from core.intelligence.human_review_protocol_r2_contract import (
     HoldoutCandidate,
     HoldoutCaseSamplingPolicy,
@@ -69,7 +67,7 @@ def _case_spec_pool(
     """Build deterministic case specs from snapshot identity only.
 
     This stage intentionally has no access to optimizer outputs, challenger scores,
-    or human evidence. Track ordering is hash-based from frozen snapshot metadata.
+    or human evidence. Track ordering is hash-based from frozen snapshot identity.
     """
     snapshot = _validate_snapshot(snapshot_raw)
     seed = _token(sampling_seed, "sampling_seed")
@@ -129,13 +127,59 @@ def _case_spec_pool(
 def _snapshot_scope_fingerprint(snapshot_raw: Mapping[str, Any]) -> str:
     tracks = _track_inputs(snapshot_raw)
     payload = [
-        {
-            "track_id": item.track_id,
-            "file_signature": item.file_signature,
-        }
+        {"track_id": item.track_id, "file_signature": item.file_signature}
         for item in sorted(tracks.values(), key=lambda item: item.track_id)
     ]
     return _fingerprint("eligible-scope-r1", payload)
+
+
+def _single_case_selection(selection_raw: Mapping[str, Any], spec: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": selection_raw["schema"],
+        "snapshot_ref": list(selection_raw["snapshot_ref"]),
+        "generator_version": selection_raw.get("generator_version"),
+        "sampling_seed": selection_raw.get("sampling_seed"),
+        "case_specs": [dict(spec)],
+    }
+
+
+def _materialize_candidate_pool(
+    *,
+    snapshot_raw: Mapping[str, Any],
+    selection_raw: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    database_path: str | Path,
+    generated_at: str,
+    blinding_seed: str,
+) -> tuple[tuple[MaterializedCase, ...], tuple[dict[str, str], ...]]:
+    """Materialize each candidate independently so one invalid case cannot abort the pool."""
+    materialized: list[MaterializedCase] = []
+    failures: list[dict[str, str]] = []
+    for spec in selection_raw["case_specs"]:
+        case_id = _token(spec["case_spec_id"], "case_spec_id")
+        try:
+            result = materialize_cases(
+                snapshot_raw=snapshot_raw,
+                selection_raw=_single_case_selection(selection_raw, spec),
+                evidence=evidence,
+                database_path=database_path,
+                generated_at=generated_at,
+                blinding_seed=blinding_seed,
+            )
+        except RealLibraryPilotError as exc:
+            failures.append(
+                {
+                    "case_id": case_id,
+                    "set_role": str(spec["set_role"]),
+                    "technical_invalidity_reason": "engineering_materialization_failed",
+                    "detail": str(exc),
+                }
+            )
+            continue
+        if len(result) != 1 or result[0].case.case_id != case_id:
+            raise FreshPersonalHoldoutRunnerError("single-case materialization identity mismatch")
+        materialized.append(result[0])
+    return tuple(materialized), tuple(failures)
 
 
 def _materialized_by_case(cases: Sequence[MaterializedCase]) -> dict[str, MaterializedCase]:
@@ -147,24 +191,47 @@ def _materialized_by_case(cases: Sequence[MaterializedCase]) -> dict[str, Materi
     return result
 
 
-def _holdout_candidates(cases: Sequence[MaterializedCase]) -> tuple[HoldoutCandidate, ...]:
-    return tuple(
-        HoldoutCandidate(
-            candidate_id=f"holdout:{item.case.case_id}",
-            case_id=item.case.case_id,
-            set_role=item.case.set_role,
-            engineering_acceptance_passed=item.case.engineering_acceptance_passed,
-            technical_invalidity_reason=(
-                None if item.case.engineering_acceptance_passed else "engineering_acceptance_failed"
-            ),
-        )
-        for item in cases
-    )
+def _holdout_candidates(
+    selection_raw: Mapping[str, Any],
+    cases: Sequence[MaterializedCase],
+    failures: Sequence[Mapping[str, str]],
+) -> tuple[HoldoutCandidate, ...]:
+    valid = _materialized_by_case(cases)
+    failed = {item["case_id"]: item for item in failures}
+    rows: list[HoldoutCandidate] = []
+    for spec in selection_raw["case_specs"]:
+        case_id = _token(spec["case_spec_id"], "case_spec_id")
+        role = CuratedSetRole(str(spec["set_role"]).strip().lower())
+        if case_id in valid:
+            rows.append(
+                HoldoutCandidate(
+                    candidate_id=f"holdout:{case_id}",
+                    case_id=case_id,
+                    set_role=role,
+                    engineering_acceptance_passed=True,
+                )
+            )
+        else:
+            failure = failed.get(case_id)
+            rows.append(
+                HoldoutCandidate(
+                    candidate_id=f"holdout:{case_id}",
+                    case_id=case_id,
+                    set_role=role,
+                    engineering_acceptance_passed=False,
+                    technical_invalidity_reason=(
+                        failure["technical_invalidity_reason"]
+                        if failure is not None
+                        else "engineering_materialization_missing"
+                    ),
+                )
+            )
+    return tuple(rows)
 
 
 def _private_track_evidence(evidence: Mapping[str, Any]) -> tuple[Any, ...]:
     rows = []
-    for track_id, item in sorted(evidence.items()):
+    for _, item in sorted(evidence.items()):
         style_tags = (item.source.genre,) if item.source.genre else None
         rows.append(
             track_curation_evidence_from_music_dna(
@@ -182,7 +249,9 @@ def _optimizer_alternative(item: MaterializedCase, *, strategy: str):
     for alternative in result.alternatives:
         if alternative.path_id == path_id:
             return alternative
-    raise FreshPersonalHoldoutRunnerError(f"materialized {strategy} path missing for {item.case.case_id}")
+    raise FreshPersonalHoldoutRunnerError(
+        f"materialized {strategy} path missing for {item.case.case_id}"
+    )
 
 
 def _challenger_record(
@@ -193,7 +262,10 @@ def _challenger_record(
 ) -> dict[str, Any]:
     role = CuratedSetRole(str(case_spec["set_role"]).strip().lower())
     seed_track_id = _token(case_spec["seed_track_id"], "seed_track_id")
-    candidate_ids = tuple(_token(v, "candidate_scope_track_id") for v in case_spec["candidate_scope_track_ids"])
+    candidate_ids = tuple(
+        _token(value, "candidate_scope_track_id")
+        for value in case_spec["candidate_scope_track_ids"]
+    )
     intent = _intent_for_case(
         case_id=item.case.case_id,
         role=role,
@@ -217,11 +289,7 @@ def _challenger_record(
     }
 
 
-def _reviewer_case(
-    item: MaterializedCase,
-    *,
-    names: Mapping[str, str],
-) -> dict[str, Any]:
+def _reviewer_case(item: MaterializedCase, *, names: Mapping[str, str]) -> dict[str, Any]:
     assignment = item.assignment
     case = item.case
     plan_by_id = {
@@ -307,7 +375,7 @@ def materialize_fresh_personal_holdout_r1(
         candidate_scope_size=candidate_scope_size,
     )
     evidence = analyze_real_tracks(snapshot_raw=snapshot_raw, selection_raw=selection_raw)
-    cases = materialize_cases(
+    cases, candidate_failures = _materialize_candidate_pool(
         snapshot_raw=snapshot_raw,
         selection_raw=selection_raw,
         evidence=evidence,
@@ -316,7 +384,7 @@ def materialize_fresh_personal_holdout_r1(
         blinding_seed=blinding_seed,
     )
     if not cases:
-        raise FreshPersonalHoldoutRunnerError("candidate materialization produced no cases")
+        raise FreshPersonalHoldoutRunnerError("candidate materialization produced no valid cases")
 
     policy = HoldoutCaseSamplingPolicy(
         policy_id="fresh-personal-holdout-r1",
@@ -330,7 +398,10 @@ def materialize_fresh_personal_holdout_r1(
         fallback_count=fallback_count,
         activation_authorized=False,
     )
-    selection = select_holdout_cases_r2(policy=policy, candidates=_holdout_candidates(cases))
+    selection = select_holdout_cases_r2(
+        policy=policy,
+        candidates=_holdout_candidates(selection_raw, cases, candidate_failures),
+    )
     prereg_payload = {
         "runner_version": FRESH_PERSONAL_HOLDOUT_RUNNER_VERSION,
         "canonical_sha": canonical,
@@ -338,6 +409,7 @@ def materialize_fresh_personal_holdout_r1(
         "snapshot_fingerprint": snapshot.library_fingerprint,
         "sampling_policy": asdict(policy),
         "selection": asdict(selection),
+        "candidate_failures": candidate_failures,
         "generated_at": generated,
     }
     prereg_fingerprint = _fingerprint("fresh-personal-holdout-prereg-r1", prereg_payload)
@@ -366,33 +438,47 @@ def materialize_fresh_personal_holdout_r1(
         _token(spec["case_spec_id"], "case_spec_id"): spec
         for spec in selection_raw["case_specs"]
     }
-    # Curated case ids are derived from the materialized scenario, not guaranteed to
-    # equal case_spec_id. Map by role/seed source order using the private materialized
-    # case sequence produced from the same selection specs.
-    if len(cases) != len(selection_raw["case_specs"]):
-        raise FreshPersonalHoldoutRunnerError("case/spec cardinality mismatch")
-    spec_for_materialized = {
-        item.case.case_id: spec
-        for item, spec in zip(cases, selection_raw["case_specs"])
-    }
-
-    track_evidence = _private_track_evidence(evidence)
-    challenger_rows = []
-    for case_id in cohort.effective_case_ids:
-        item = by_case.get(case_id)
-        if item is None:
-            raise FreshPersonalHoldoutRunnerError("effective holdout case missing from materialized cases")
-        challenger_rows.append(
-            _challenger_record(
-                item,
-                case_spec=spec_for_materialized[case_id],
-                track_evidence=track_evidence,
-            )
+    frozen_case_ids = tuple(selection.selected_case_ids) + tuple(selection.fallback_case_ids)
+    if any(case_id not in by_case for case_id in frozen_case_ids):
+        raise FreshPersonalHoldoutRunnerError(
+            "selected/fallback holdout references a non-materialized candidate"
         )
 
-    names = {track_id: item.source.display_name for track_id, item in evidence.items()}
-    reviewer_rows = [_reviewer_case(by_case[case_id], names=names) for case_id in cohort.effective_case_ids]
+    track_evidence = _private_track_evidence(evidence)
+    challenger_rows = [
+        _challenger_record(
+            by_case[case_id],
+            case_spec=spec_by_case[case_id],
+            track_evidence=track_evidence,
+        )
+        for case_id in frozen_case_ids
+    ]
 
+    names = {track_id: item.source.display_name for track_id, item in evidence.items()}
+    reviewer_rows = [
+        _reviewer_case(by_case[case_id], names=names)
+        for case_id in cohort.effective_case_ids
+    ]
+    role_counts = {
+        role.value: sum(row["set_role"] == role.value for row in reviewer_rows)
+        for role in CuratedSetRole
+    }
+    if len(reviewer_rows) != 24 or any(count != 4 for count in role_counts.values()):
+        raise FreshPersonalHoldoutRunnerError(
+            "effective reviewer cohort must contain exactly 24 cases, four per set role"
+        )
+
+    track_provenance = [
+        {
+            "track_id": track_id,
+            "absolute_path": item.source.absolute_path,
+            "inventory_file_signature": item.source.file_signature,
+            "content_sha256": item.content_sha256,
+            "analysis_revision": item.music_dna.identity.analysis_revision,
+            "genre": item.source.genre,
+        }
+        for track_id, item in sorted(evidence.items())
+    ]
     private_payload = {
         "schema": FRESH_PERSONAL_HOLDOUT_PRIVATE_SCHEMA,
         "runner_version": FRESH_PERSONAL_HOLDOUT_RUNNER_VERSION,
@@ -405,15 +491,22 @@ def materialize_fresh_personal_holdout_r1(
             "publishable_to_public_repo": False,
             "storage_class": "CASER_PRIVATE_EVIDENCE",
         },
+        "track_provenance": track_provenance,
         "candidate_case_specs": selection_raw,
+        "candidate_failures": list(candidate_failures),
         "sampling_policy": asdict(policy),
         "selection": asdict(selection),
         "preregistration_fingerprint": prereg_fingerprint,
         "replacement_policy": asdict(replacement_policy),
-        "replacement_policy_fingerprint": holdout_replacement_policy_fingerprint(replacement_policy),
+        "replacement_policy_fingerprint": holdout_replacement_policy_fingerprint(
+            replacement_policy
+        ),
         "effective_cohort": asdict(cohort),
-        "assignments": [asdict(by_case[case_id].assignment) for case_id in cohort.effective_case_ids],
+        "assignments": [
+            asdict(by_case[case_id].assignment) for case_id in frozen_case_ids
+        ],
         "challenger_evidence": challenger_rows,
+        "challenger_frozen_before_reviewer_publication": True,
         "activation_authorized": False,
         "personal_dj_model_training_authorized": False,
     }
@@ -425,6 +518,12 @@ def materialize_fresh_personal_holdout_r1(
         "algorithm_identity_hidden": True,
         "sequence_only": True,
         "transition_execution_required": False,
+        "required_review_dimensions": [
+            "energy_flow",
+            "dramaturgical_fit",
+            "set_coherence",
+            "alternative_usefulness",
+        ],
         "cases": reviewer_rows,
         "activation_authorized": False,
         "personal_dj_model_training_authorized": False,
@@ -436,9 +535,24 @@ def materialize_fresh_personal_holdout_r1(
     private_path = output / "APPLAYLIST_FRESH_PERSONAL_HOLDOUT_R1.private.json"
     reviewer_path = output / "APPLAYLIST_FRESH_PERSONAL_HOLDOUT_REVIEWER_R1.json"
     csv_path = output / "APPLAYLIST_FRESH_PERSONAL_HOLDOUT_REVIEW_R1.csv"
-    private_path.write_text(json.dumps(private_payload, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
-    reviewer_path.write_text(json.dumps(reviewer_payload, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    private_path.write_text(
+        json.dumps(private_payload, indent=2, ensure_ascii=False, default=str) + "\n",
+        encoding="utf-8",
+    )
+    reviewer_path.write_text(
+        json.dumps(reviewer_payload, indent=2, ensure_ascii=False, default=str) + "\n",
+        encoding="utf-8",
+    )
     _write_review_csv(csv_path, reviewer_rows)
+
+    private_text = private_path.read_text(encoding="utf-8")
+    reviewer_text = reviewer_path.read_text(encoding="utf-8")
+    if any(token in reviewer_text for token in ("absolute_path", "left_score", "right_score")):
+        raise FreshPersonalHoldoutRunnerError("reviewer packet leaked private/challenger evidence")
+    if any(path in reviewer_text for path in (item.source.absolute_path for item in evidence.values())):
+        raise FreshPersonalHoldoutRunnerError("reviewer packet leaked an absolute audio path")
+    if "challenger_evidence" not in private_text:
+        raise FreshPersonalHoldoutRunnerError("private preregistration is missing challenger evidence")
 
     return {
         "private_manifest": str(private_path),
@@ -448,6 +562,7 @@ def materialize_fresh_personal_holdout_r1(
         "reviewer_packet_sha256": hashlib.sha256(reviewer_path.read_bytes()).hexdigest(),
         "review_csv_sha256": hashlib.sha256(csv_path.read_bytes()).hexdigest(),
         "effective_case_count": str(len(cohort.effective_case_ids)),
+        "fallback_case_count": str(len(selection.fallback_case_ids)),
         "preregistration_fingerprint": prereg_fingerprint,
     }
 
