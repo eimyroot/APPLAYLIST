@@ -30,7 +30,16 @@ def _parser() -> argparse.ArgumentParser:
         "--exclude-reviewer-packet",
         action="append",
         required=True,
-        help="Prior blinded reviewer packet to exclude from fresh holdout exposure; repeatable.",
+        help="Prior blinded reviewer packet to exclude from visible-sequence exposure; repeatable.",
+    )
+    parser.add_argument(
+        "--exclude-private-manifest",
+        action="append",
+        required=True,
+        help=(
+            "Prior private review manifest carrying stable track-identity exposure evidence; "
+            "repeatable."
+        ),
     )
     parser.add_argument("--cases-per-role", type=int, default=8)
     parser.add_argument("--candidate-scope-size", type=int, default=16)
@@ -84,8 +93,9 @@ def main() -> int:
         canonical_sha=args.canonical_sha,
         canonical_branch=args.canonical_branch,
     )
+    snapshot_path = Path(args.snapshot)
     result = materialize_fresh_personal_holdout_r1(
-        snapshot_path=Path(args.snapshot),
+        snapshot_path=snapshot_path,
         output_dir=Path(args.output),
         database_path=Path(args.database),
         canonical_sha=args.canonical_sha,
@@ -98,7 +108,9 @@ def main() -> int:
     )
     result = finalize_fresh_holdout_reviewer_workspace(
         result,
+        snapshot_path=snapshot_path,
         prior_reviewer_packet_paths=tuple(args.exclude_reviewer_packet),
+        prior_private_manifest_paths=tuple(args.exclude_private_manifest),
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
