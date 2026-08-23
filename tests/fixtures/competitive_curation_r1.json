@@ -1,0 +1,35 @@
+{
+  "schema": "applaylist-competitive-curation-benchmark-r1",
+  "provenance": {
+    "source": "R4 Pilot Run 1 qualitative DJ selection review",
+    "human_feedback_fabricated": false,
+    "purpose": "bounded regression scenarios, not production truth"
+  },
+  "scenarios": [
+    {
+      "scenario_id": "coherent-house-tech-house-peak",
+      "expected_signal": "competitive",
+      "finding": "related House-family styles with rising peak energy should remain coherent"
+    },
+    {
+      "scenario_id": "ukg-saturation",
+      "expected_signal": "insufficient",
+      "finding": "repeated non-target UKG concentration should be surfaced"
+    },
+    {
+      "scenario_id": "sudden-rave-techno-drift",
+      "expected_signal": "insufficient",
+      "finding": "unexplained House-to-rave-techno drift should be surfaced"
+    },
+    {
+      "scenario_id": "under-energy-peak",
+      "expected_signal": "insufficient",
+      "finding": "peak-time path without enough energy should be surfaced"
+    },
+    {
+      "scenario_id": "near-equivalent-alternatives",
+      "expected_signal": "tie",
+      "finding": "technically different paths without material curation difference should not create a fake winner"
+    }
+  ]
+}
