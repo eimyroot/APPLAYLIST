@@ -17,10 +17,12 @@ The runner must stop before human labels are collected unless all pre-label evid
 7. Freeze replacement policy and effective cohort.
 8. Compute Bundle 67 competitive-curation shadow comparisons for the selected cases and frozen fallback reservoir before reviewer workspace publication.
 9. Persist a private pre-registration manifest containing selection, assignments, challenger evidence, fingerprints, and authority=false.
-10. Finalize a reviewer-safe workspace bound to the exact preregistration/selection/cohort fingerprints.
-11. Before reviewer publication, compare every effective A/B sequence against a required prior-exposure reviewer-packet registry. Reject any case that reproduces a previously exposed individual plan sequence or A/B pair.
-12. Publish a reviewer-safe packet containing only anonymous Plan A / Plan B track sequences and the four R2 curation dimensions.
-13. Create the review CSV with system binding metadata but leave all human judgments and clean-attestation assertions empty; no ratings, preferences, confidence, timestamps, or exposure claims may be fabricated.
+10. Before finalization, verify byte identity of the generated private manifest, reviewer packet, and CSV against their pre-finalization SHA-256 values.
+11. Require reviewer case order/identity to match the frozen effective cohort exactly, with assignment and set-role metadata matching private frozen evidence.
+12. Apply dual prior-exposure exclusion: reviewer-visible sequence matching plus stable track-ID matching from prior private manifests.
+13. Finalize a reviewer-safe workspace bound to the exact preregistration/selection/cohort and exposure-registry fingerprints.
+14. Publish a reviewer-safe packet containing only anonymous Plan A / Plan B track sequences and the four R2 curation dimensions.
+15. Create the review CSV with system binding metadata but leave all human judgments and clean-attestation assertions empty; no ratings, preferences, confidence, timestamps, or exposure claims may be fabricated.
 
 ## Critical isolation
 
@@ -37,13 +39,18 @@ The challenger comparison is computed only after holdout selection is frozen, bu
 
 ## Freshness / prior-exposure rule
 
-A new `case_id` alone is not evidence that a case is fresh. The formal run requires one or more prior blinded reviewer packets representing sequences already exposed to the reviewer.
+A new `case_id` or changed display metadata is not evidence that a case is fresh.
 
-Before Case 1 may be opened, the workspace finalizer must fail closed if an effective holdout case contains:
-- an exact Plan A or Plan B sequence previously exposed to the reviewer; or
-- an exact previously exposed A/B sequence pair, regardless of case identifier.
+The formal run requires two independent historical exposure sources:
 
-This prevents renamed or regenerated historical cases from being counted as independent personal-holdout evidence.
+1. prior blinded reviewer packet(s), used to reject exact reviewer-visible Plan A / Plan B sequence reuse;
+2. prior private review manifest(s), used to reject exact stable track-ID sequence reuse even if display metadata changed.
+
+Before Case 1 may be opened, the workspace finalizer must fail closed if an effective holdout case reproduces:
+- an exact previously exposed individual plan sequence; or
+- an exact previously exposed A/B sequence pair.
+
+After successful finalization the new private manifest receives an opaque stable-exposure registry so subsequent fresh runs can exclude this holdout without exposing track identities to the reviewer.
 
 ## Reviewer-safe dimensions
 
@@ -67,8 +74,8 @@ The review CSV contains explicit R2 attestation fields, but the human-controlled
 - local audio paths stay in private evidence only;
 - no audio upload;
 - no cloud MIR execution;
-- reviewer packet must not expose absolute paths, optimizer strategy identity, shadow scores, or challenger preference;
-- prior-exposure packets are used only for sequence-fingerprint exclusion and do not authorize publication of private evidence.
+- reviewer packet must not expose absolute paths, optimizer strategy identity, shadow scores, challenger preference, or stable track IDs;
+- prior-exposure sources are hashed/bound in private evidence and are not published through the reviewer packet.
 
 ## Authority
 
