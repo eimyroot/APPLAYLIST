@@ -79,7 +79,7 @@ The original 12 reviewed cases are `development_regression`; they cannot count a
 
 ## Frozen replacement policy
 
-Fallback replacement is also preregistered rather than supplied as a mutable call-time allowlist.
+Fallback replacement is preregistered rather than supplied as a mutable call-time allowlist.
 
 `HoldoutReplacementPolicyR2` binds:
 
@@ -91,7 +91,25 @@ Fallback replacement is also preregistered rather than supplied as a mutable cal
 
 Replacement can only select the next case from the already-frozen fallback order and only for an allowed technical reason. Preference/challenger-like reason vocabulary is rejected by the policy contract.
 
-The final report binds the deterministic replacement-policy fingerprint into its report identity.
+## Immutable effective holdout cohort
+
+A technically invalid selected case does not mutate or erase the original frozen selection. Instead, `build_effective_holdout_cohort_r2(...)` derives an immutable `EffectiveHoldoutCohortR2` from:
+
+- the original frozen `HoldoutSelectionResult`;
+- the frozen `HoldoutReplacementPolicyR2`;
+- the preregistration manifest fingerprint;
+- bounded technical-invalidity events.
+
+Every replacement produces a `HoldoutReplacementEventR2` that preserves:
+
+- invalid selected case id;
+- replacement fallback case id;
+- technical-invalidity reason;
+- frozen fallback ordinal.
+
+An invalid selected case may be replaced at most once and a fallback case may be consumed at most once. The effective cohort preserves original selection provenance while defining the exact case ids that may contribute clean formal holdout evidence.
+
+The final calibration report binds the exact effective cohort, replacement-policy fingerprint, original selection fingerprint and preregistration fingerprint into report identity.
 
 ## Transition isolation
 
@@ -136,19 +154,21 @@ The case-calibration function consumes only:
 - blind assignment;
 - CurationReviewR2;
 - immutable CurationCleanAttestationR2;
-- Bundle 67 ShadowPathComparison.
+- Bundle 67 ShadowPathComparison;
+- immutable EffectiveHoldoutCohortR2 membership.
 
 Transition and execution artifacts are not accepted as inputs.
 
 The report additionally requires:
 
 - exact calibration bindings for every evidence row;
-- frozen holdout selection;
+- original frozen holdout selection;
+- immutable effective holdout cohort;
 - frozen HoldoutReplacementPolicyR2;
 - preregistration-manifest fingerprint;
 - versioned calibration policy.
 
-Clean evidence outside the frozen selected holdout fails closed. A personal holdout case may contribute at most one clean review, so changing `review_id` cannot inflate sample size. Missing selected clean cases keep the verdict `INCOMPLETE`.
+Clean evidence outside the immutable effective cohort fails closed. A personal holdout case may contribute at most one clean review, so changing `review_id` cannot inflate sample size. Missing effective-cohort clean cases keep the verdict `INCOMPLETE`.
 
 For personal-DJ calibration:
 
@@ -156,7 +176,9 @@ For personal-DJ calibration:
 - development/regression cases are excluded;
 - abstains are excluded from accuracy denominators;
 - ties remain first-class evidence;
-- exact and decisive agreement are reported;
+- exact agreement may still be reported for a near-equivalent A/B case;
+- only `meaningfully_distinct` cases may contribute decisive ranking agreement;
+- near-equivalent cases remain diagnostic/tie/false-winner evidence but cannot inflate decisive ranking evidence;
 - 95% Wilson intervals are reported;
 - policy gates use Wilson lower bounds, not point estimates alone;
 - all six set roles are required;
@@ -180,17 +202,19 @@ Tests cover, among other cases:
 - holdout selection is deterministic and input-order independent;
 - replacement policy is frozen and bound to the exact selection manifest;
 - frozen fallback order cannot be bypassed;
+- technical replacement creates an immutable effective cohort without rewriting original selection provenance;
+- a valid frozen fallback replacement can complete the formal calibration report;
 - transition spec fingerprint changes on bound window changes;
 - missing vocal evidence is `not_assessable`;
 - tempo/harmonic feasibility stay independent;
 - human transition audition requires preview/recipe evidence;
 - every calibration evidence row must have an exact immutable calibration binding;
-- clean evidence must belong to the frozen holdout;
+- clean evidence must belong to the effective frozen holdout cohort;
 - the same case cannot inflate personal holdout `n` with multiple review IDs;
+- near-equivalent cases cannot contribute decisive ranking agreement;
 - complete clean 24-case personal holdout can support only further evaluation;
 - Wilson lower bounds, not point estimates, drive the policy gate;
 - general claims cannot use the personal independent-row analyzer;
-- near-equivalent cases remain diagnostic evidence;
 - activation authority remains false.
 
 ## Privacy / execution boundary
