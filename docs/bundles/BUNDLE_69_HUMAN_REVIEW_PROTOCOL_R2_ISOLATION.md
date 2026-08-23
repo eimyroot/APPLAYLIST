@@ -19,7 +19,7 @@ Issue #162 redesigned the protocol. Three independent adversarial design passes 
 
 Bundle 69 does not modify Bundle 63/R1 or Bundle 68/R2 code. Historical R1 evidence keeps its original meaning.
 
-New contracts are introduced under `human-dj-review-r2` and `curation-calibration-r3`.
+New contracts are introduced under `human-dj-review-r2`, preregistration/binding R2/R3 contracts, and `curation-calibration-r3`.
 
 ## CurationReviewR2
 
@@ -33,11 +33,32 @@ Formal curation review contains only:
 - confidence;
 - prior case exposure;
 - sequence-only judgment mode;
-- explicit assertions that no transition execution or preview was used.
+- assertions about transition execution/preview use and blind integrity.
 
 A contaminated review is preserved as evidence but is not eligible for clean holdout calibration.
 
 Explicit human preference is never rewritten from dimension arithmetic.
+
+## Immutable clean attestation
+
+A review is not treated as clean merely because convenient defaults say `no exposure` or `no transition execution`.
+
+Formal calibration additionally requires a separate `CurationCleanAttestationR2` bound to:
+
+- exact `review_id`;
+- exact `curation_session_id`;
+- prior case exposure;
+- judgment mode;
+- transition execution used/not used;
+- transition preview heard/not heard;
+- algorithm identity hidden status;
+- observed timestamp.
+
+The calibration service requires exact fact equality between review and attestation. A mismatch fails closed.
+
+`CurationCalibrationBindingR3` then persists the deterministic attestation fingerprint together with the case/review/session identity and frozen selection-manifest fingerprint. The final calibration report requires one exact binding for every evidence row and includes those bindings in its report identity.
+
+This prevents an untraceable runtime boolean from becoming the authority for clean-holdout eligibility.
 
 ## Holdout isolation
 
@@ -54,9 +75,23 @@ Explicit human preference is never rewritten from dimension arithmetic.
 
 The selection ledger preserves selected/rejected/fallback provenance.
 
-Replacement can use only the already-frozen fallback order.
-
 The original 12 reviewed cases are `development_regression`; they cannot count as clean personal/general holdout evidence.
+
+## Frozen replacement policy
+
+Fallback replacement is also preregistered rather than supplied as a mutable call-time allowlist.
+
+`HoldoutReplacementPolicyR2` binds:
+
+- frozen selection manifest fingerprint;
+- preregistration manifest fingerprint;
+- frozen timestamp;
+- exact allowed technical-invalidity reason codes;
+- policy version.
+
+Replacement can only select the next case from the already-frozen fallback order and only for an allowed technical reason. Preference/challenger-like reason vocabulary is rejected by the policy contract.
+
+The final report binds the deterministic replacement-policy fingerprint into its report identity.
 
 ## Transition isolation
 
@@ -95,14 +130,25 @@ Human transition audition requires a deterministic rendered preview fingerprint 
 
 ## CurationCalibrationR3
 
-The calibration function consumes only:
+The case-calibration function consumes only:
 
 - source case binding;
 - blind assignment;
 - CurationReviewR2;
+- immutable CurationCleanAttestationR2;
 - Bundle 67 ShadowPathComparison.
 
 Transition and execution artifacts are not accepted as inputs.
+
+The report additionally requires:
+
+- exact calibration bindings for every evidence row;
+- frozen holdout selection;
+- frozen HoldoutReplacementPolicyR2;
+- preregistration-manifest fingerprint;
+- versioned calibration policy.
+
+Clean evidence outside the frozen selected holdout fails closed. A personal holdout case may contribute at most one clean review, so changing `review_id` cannot inflate sample size. Missing selected clean cases keep the verdict `INCOMPLETE`.
 
 For personal-DJ calibration:
 
@@ -124,6 +170,7 @@ The personal analyzer rejects `general_dj_product_validation`; general validatio
 Tests cover, among other cases:
 
 - R1 dimensions cannot satisfy R2;
+- immutable attestation must exactly bind review/session facts;
 - development cases cannot become clean holdout evidence;
 - manual transition execution contaminates/excludes curation review;
 - prior case exposure excludes clean holdout evidence;
@@ -131,14 +178,17 @@ Tests cover, among other cases:
 - numeric dimension arithmetic does not rewrite explicit preference;
 - shadow path identity mismatch fails closed;
 - holdout selection is deterministic and input-order independent;
-- frozen fallback replacement cannot be bypassed;
+- replacement policy is frozen and bound to the exact selection manifest;
+- frozen fallback order cannot be bypassed;
 - transition spec fingerprint changes on bound window changes;
 - missing vocal evidence is `not_assessable`;
 - tempo/harmonic feasibility stay independent;
 - human transition audition requires preview/recipe evidence;
+- every calibration evidence row must have an exact immutable calibration binding;
+- clean evidence must belong to the frozen holdout;
+- the same case cannot inflate personal holdout `n` with multiple review IDs;
 - complete clean 24-case personal holdout can support only further evaluation;
 - Wilson lower bounds, not point estimates, drive the policy gate;
-- duplicate review IDs fail closed;
 - general claims cannot use the personal independent-row analyzer;
 - near-equivalent cases remain diagnostic evidence;
 - activation authority remains false.
