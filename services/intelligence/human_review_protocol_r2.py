@@ -58,6 +58,13 @@ def _fingerprint(prefix: str, value: object) -> str:
     return f"{prefix}:{hashlib.sha256(_canonical_json_bytes(value)).hexdigest()}"
 
 
+def _token(value: str, field: str) -> str:
+    normalized = str(value).strip()
+    if not normalized:
+        raise HumanReviewProtocolR2Error(f"{field} must not be empty")
+    return normalized
+
+
 def transition_review_spec_fingerprint(spec: TransitionReviewSpecR2) -> str:
     """Bind every transition-review parameter to a deterministic identity."""
     return _fingerprint("transition-review-spec-r2", asdict(spec))
@@ -218,11 +225,28 @@ def replacement_case_r2(
     *,
     selection: HoldoutSelectionResult,
     invalid_case_id: str,
+    technical_invalidity_reason: str,
+    allowed_technical_invalidity_reasons: tuple[str, ...],
     already_used_fallback_case_ids: tuple[str, ...] = (),
 ) -> str:
-    """Return only the next case from the already-frozen fallback order."""
+    """Return only the next frozen fallback for a pre-registered technical invalidity."""
     if invalid_case_id not in selection.selected_case_ids:
         raise HumanReviewProtocolR2Error("replacement target must be a selected holdout case")
+    reason = _token(technical_invalidity_reason, "technical_invalidity_reason")
+    allowed = tuple(_token(item, "allowed_technical_invalidity_reason") for item in allowed_technical_invalidity_reasons)
+    if reason not in allowed:
+        raise HumanReviewProtocolR2Error("replacement reason is outside pre-registered technical invalidity reasons")
+    forbidden_reason_tokens = (
+        "preference",
+        "rating",
+        "score",
+        "challenger",
+        "human",
+        "like",
+        "dislike",
+    )
+    if any(token in reason.lower() for token in forbidden_reason_tokens):
+        raise HumanReviewProtocolR2Error("replacement reason is preference/challenger contaminated")
     used = set(already_used_fallback_case_ids)
     if not used.issubset(set(selection.fallback_case_ids)):
         raise HumanReviewProtocolR2Error("used fallback case id is outside frozen fallback reservoir")
@@ -296,16 +320,23 @@ def calibrate_curation_case_r3(
     assignment: BlindedPlanAssignment,
     review: CurationReviewR2,
     comparison: ShadowPathComparison,
+    clean_sequence_attestation: bool,
 ) -> CurationCalibrationEvidenceR3:
     """Calibrate only explicit curation preference; transition/execution are not inputs."""
     human = _human_preference(case_binding=case_binding, assignment=assignment, review=review)
     challenger = _challenger_preference(case_binding=case_binding, comparison=comparison)
 
     clean = bool(
-        case_binding.dataset_role in (ReviewDatasetRole.PERSONAL_HOLDOUT, ReviewDatasetRole.GENERAL_HOLDOUT)
+        clean_sequence_attestation
+        and case_binding.dataset_role
+        in (ReviewDatasetRole.PERSONAL_HOLDOUT, ReviewDatasetRole.GENERAL_HOLDOUT)
         and review.clean_holdout_eligible
     )
     reasons: list[str] = []
+    if not clean_sequence_attestation:
+        reasons.append("explicit_clean_sequence_attestation_missing")
+    else:
+        reasons.append("explicit_clean_sequence_attestation_present")
     if case_binding.dataset_role is ReviewDatasetRole.DEVELOPMENT_REGRESSION:
         reasons.append("development_regression_case_excluded_from_holdout_metrics")
     if not review.clean_holdout_eligible:
@@ -380,13 +411,19 @@ def wilson_interval(successes: int, total: int, *, z: float = 1.959963984540054)
 def build_curation_calibration_report_r3(
     *,
     case_evidence: tuple[CurationCalibrationEvidenceR3, ...],
+    selection: HoldoutSelectionResult,
+    preregistration_manifest_fingerprint: str,
     policy: CurationCalibrationPolicyR3 = CurationCalibrationPolicyR3(),
 ) -> CurationCalibrationReportR3:
-    """Build a personal-DJ curation report without reading transition/execution evidence."""
+    """Build a bound personal-DJ curation report without transition/execution evidence."""
     if policy.claim_scope is ValidationClaimScope.GENERAL_DJ_PRODUCT_VALIDATION:
         raise HumanReviewProtocolR2Error(
             "general DJ validation requires the separate pre-registered cluster-aware analyzer"
         )
+    preregistration_fingerprint = _token(
+        preregistration_manifest_fingerprint,
+        "preregistration_manifest_fingerprint",
+    )
 
     evidence = tuple(sorted(case_evidence, key=lambda item: (item.case_id, item.review_id)))
     if not evidence:
@@ -400,6 +437,13 @@ def build_curation_calibration_report_r3(
         for item in evidence
         if item.clean_holdout_eligible and item.dataset_role is ReviewDatasetRole.PERSONAL_HOLDOUT
     )
+    clean_case_ids = [item.case_id for item in clean]
+    if len(set(clean_case_ids)) != len(clean_case_ids):
+        raise HumanReviewProtocolR2Error("personal holdout case may contribute at most one clean review")
+    selected_case_ids = set(selection.selected_case_ids)
+    if any(case_id not in selected_case_ids for case_id in clean_case_ids):
+        raise HumanReviewProtocolR2Error("clean curation evidence references case outside frozen holdout selection")
+
     reviewer_refs = {item.reviewer_ref for item in clean}
     if len(reviewer_refs) > 1:
         raise HumanReviewProtocolR2Error(
@@ -438,6 +482,7 @@ def build_curation_calibration_report_r3(
 
     covered_roles = tuple(sorted({item.set_role for item in clean}, key=lambda item: item.value))
     missing_roles = tuple(role for role in CuratedSetRole if role not in covered_roles)
+    missing_selected_case_ids = selected_case_ids - set(clean_case_ids)
 
     explanations: list[str] = []
     incomplete = False
@@ -450,6 +495,9 @@ def build_curation_calibration_report_r3(
     if missing_roles:
         incomplete = True
         explanations.append("required_set_roles_missing")
+    if missing_selected_case_ids:
+        incomplete = True
+        explanations.append("frozen_holdout_cases_missing_clean_review")
 
     if incomplete:
         verdict = CurationCalibrationVerdict.INCOMPLETE
@@ -483,6 +531,9 @@ def build_curation_calibration_report_r3(
 
     payload = {
         "policy": asdict(policy),
+        "selection_manifest_fingerprint": selection.manifest_fingerprint,
+        "selected_case_ids": sorted(selection.selected_case_ids),
+        "preregistration_manifest_fingerprint": preregistration_fingerprint,
         "clean_case_evidence": [
             {
                 "case_id": item.case_id,
