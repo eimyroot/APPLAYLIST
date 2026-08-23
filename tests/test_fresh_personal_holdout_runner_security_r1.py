@@ -17,6 +17,13 @@ def test_reviewer_packet_builder_has_no_strategy_or_challenger_parameters() -> N
     assert parameters == {"item", "names"}
 
 
+def test_private_manifest_freezes_source_review_cases_for_unblinding() -> None:
+    source = inspect.getsource(runner.materialize_fresh_personal_holdout_r1)
+    assert '"source_review_cases"' in source
+    assert "asdict(by_case[case_id].case)" in source
+    assert '"source_review_cases_frozen_before_reviewer_publication": True' in source
+
+
 def test_runner_has_no_activation_path() -> None:
     source = inspect.getsource(runner).lower()
     assert "activation_authorized\": true" not in source
