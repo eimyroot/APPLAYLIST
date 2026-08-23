@@ -143,25 +143,71 @@ def _single_case_selection(selection_raw: Mapping[str, Any], spec: Mapping[str, 
     }
 
 
+def _analyze_candidate_pool(
+    *,
+    snapshot_raw: Mapping[str, Any],
+    selection_raw: Mapping[str, Any],
+) -> tuple[dict[str, Mapping[str, Any]], dict[str, Any], tuple[dict[str, str], ...]]:
+    """Analyze each candidate independently so one MIR failure cannot abort the pool."""
+    evidence_by_case: dict[str, Mapping[str, Any]] = {}
+    merged_evidence: dict[str, Any] = {}
+    failures: list[dict[str, str]] = []
+    for spec in selection_raw["case_specs"]:
+        case_id = _token(spec["case_spec_id"], "case_spec_id")
+        try:
+            case_evidence = analyze_real_tracks(
+                snapshot_raw=snapshot_raw,
+                selection_raw=_single_case_selection(selection_raw, spec),
+            )
+        except RealLibraryPilotError as exc:
+            failures.append(
+                {
+                    "case_id": case_id,
+                    "set_role": str(spec["set_role"]),
+                    "technical_invalidity_reason": "analysis_failed",
+                    "detail": str(exc),
+                }
+            )
+            continue
+        evidence_by_case[case_id] = case_evidence
+        merged_evidence.update(case_evidence)
+    return evidence_by_case, merged_evidence, tuple(failures)
+
+
 def _materialize_candidate_pool(
     *,
     snapshot_raw: Mapping[str, Any],
     selection_raw: Mapping[str, Any],
-    evidence: Mapping[str, Any],
+    evidence_by_case: Mapping[str, Mapping[str, Any]],
+    initial_failures: Sequence[Mapping[str, str]],
     database_path: str | Path,
     generated_at: str,
     blinding_seed: str,
 ) -> tuple[tuple[MaterializedCase, ...], tuple[dict[str, str], ...]]:
     """Materialize each candidate independently so one invalid case cannot abort the pool."""
     materialized: list[MaterializedCase] = []
-    failures: list[dict[str, str]] = []
+    failures: list[dict[str, str]] = [dict(item) for item in initial_failures]
+    failed_case_ids = {item["case_id"] for item in failures}
     for spec in selection_raw["case_specs"]:
         case_id = _token(spec["case_spec_id"], "case_spec_id")
+        case_evidence = evidence_by_case.get(case_id)
+        if case_evidence is None:
+            if case_id not in failed_case_ids:
+                failures.append(
+                    {
+                        "case_id": case_id,
+                        "set_role": str(spec["set_role"]),
+                        "technical_invalidity_reason": "analysis_failed",
+                        "detail": "per-case MIR evidence missing after analysis boundary",
+                    }
+                )
+                failed_case_ids.add(case_id)
+            continue
         try:
             result = materialize_cases(
                 snapshot_raw=snapshot_raw,
                 selection_raw=_single_case_selection(selection_raw, spec),
-                evidence=evidence,
+                evidence=case_evidence,
                 database_path=database_path,
                 generated_at=generated_at,
                 blinding_seed=blinding_seed,
@@ -374,11 +420,15 @@ def materialize_fresh_personal_holdout_r1(
         cases_per_role=cases_per_role,
         candidate_scope_size=candidate_scope_size,
     )
-    evidence = analyze_real_tracks(snapshot_raw=snapshot_raw, selection_raw=selection_raw)
+    evidence_by_case, evidence, analysis_failures = _analyze_candidate_pool(
+        snapshot_raw=snapshot_raw,
+        selection_raw=selection_raw,
+    )
     cases, candidate_failures = _materialize_candidate_pool(
         snapshot_raw=snapshot_raw,
         selection_raw=selection_raw,
-        evidence=evidence,
+        evidence_by_case=evidence_by_case,
+        initial_failures=analysis_failures,
         database_path=database_path,
         generated_at=generated,
         blinding_seed=blinding_seed,
@@ -502,6 +552,10 @@ def materialize_fresh_personal_holdout_r1(
             replacement_policy
         ),
         "effective_cohort": asdict(cohort),
+        "source_review_cases": [
+            asdict(by_case[case_id].case) for case_id in frozen_case_ids
+        ],
+        "source_review_cases_frozen_before_reviewer_publication": True,
         "assignments": [
             asdict(by_case[case_id].assignment) for case_id in frozen_case_ids
         ],
@@ -553,6 +607,8 @@ def materialize_fresh_personal_holdout_r1(
         raise FreshPersonalHoldoutRunnerError("reviewer packet leaked an absolute audio path")
     if "challenger_evidence" not in private_text:
         raise FreshPersonalHoldoutRunnerError("private preregistration is missing challenger evidence")
+    if "source_review_cases" not in private_text:
+        raise FreshPersonalHoldoutRunnerError("private preregistration is missing source review cases")
 
     return {
         "private_manifest": str(private_path),
