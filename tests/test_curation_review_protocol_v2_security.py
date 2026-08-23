@@ -4,6 +4,7 @@ import inspect
 
 import pytest
 
+import services.intelligence.curation_holdout_guard_v1 as holdout_guard_module
 import services.intelligence.curation_preference_calibration_v3 as calibration_module
 import services.intelligence.curation_review_execution_v2 as review_module
 from core.intelligence.curated_real_library_review_contract import CuratedSetRole
@@ -114,7 +115,11 @@ def test_packet_authority_flags_fail_closed() -> None:
 
 
 def test_curation_protocol_services_are_pure_no_io_network_or_provider_execution() -> None:
-    source = inspect.getsource(review_module) + inspect.getsource(calibration_module)
+    source = (
+        inspect.getsource(review_module)
+        + inspect.getsource(calibration_module)
+        + inspect.getsource(holdout_guard_module)
+    )
     forbidden = (
         "pathlib",
         "Path(",
