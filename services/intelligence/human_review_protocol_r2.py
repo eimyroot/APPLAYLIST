@@ -16,6 +16,8 @@ from core.intelligence.curated_real_library_review_contract import (
 from core.intelligence.human_review_preregistration_r2_contract import (
     CurationCalibrationBindingR3,
     CurationCleanAttestationR2,
+    EffectiveHoldoutCohortR2,
+    HoldoutReplacementEventR2,
     HoldoutReplacementPolicyR2,
 )
 from core.intelligence.human_review_protocol_r2_contract import (
@@ -234,6 +236,22 @@ def select_holdout_cases_r2(
     )
 
 
+def _validate_replacement_policy(
+    *,
+    selection: HoldoutSelectionResult,
+    replacement_policy: HoldoutReplacementPolicyR2,
+    preregistration_manifest_fingerprint: str | None = None,
+) -> None:
+    if replacement_policy.selection_manifest_fingerprint != selection.manifest_fingerprint:
+        raise HumanReviewProtocolR2Error("replacement policy does not bind to frozen holdout selection")
+    if (
+        preregistration_manifest_fingerprint is not None
+        and replacement_policy.preregistration_manifest_fingerprint
+        != preregistration_manifest_fingerprint
+    ):
+        raise HumanReviewProtocolR2Error("replacement policy does not bind to preregistration manifest")
+
+
 def replacement_case_r2(
     *,
     selection: HoldoutSelectionResult,
@@ -243,8 +261,7 @@ def replacement_case_r2(
     already_used_fallback_case_ids: tuple[str, ...] = (),
 ) -> str:
     """Return only the next frozen fallback under the frozen replacement policy."""
-    if replacement_policy.selection_manifest_fingerprint != selection.manifest_fingerprint:
-        raise HumanReviewProtocolR2Error("replacement policy does not bind to frozen holdout selection")
+    _validate_replacement_policy(selection=selection, replacement_policy=replacement_policy)
     if invalid_case_id not in selection.selected_case_ids:
         raise HumanReviewProtocolR2Error("replacement target must be a selected holdout case")
     reason = _token(technical_invalidity_reason, "technical_invalidity_reason")
@@ -259,6 +276,96 @@ def replacement_case_r2(
         if case_id not in used:
             return case_id
     raise HumanReviewProtocolR2Error("frozen fallback reservoir exhausted")
+
+
+def build_effective_holdout_cohort_r2(
+    *,
+    selection: HoldoutSelectionResult,
+    replacement_policy: HoldoutReplacementPolicyR2,
+    preregistration_manifest_fingerprint: str,
+    technical_invalidities: tuple[tuple[str, str], ...] = (),
+) -> EffectiveHoldoutCohortR2:
+    """Apply only pre-registered technical replacements in frozen deterministic order."""
+    preregistration = _token(
+        preregistration_manifest_fingerprint,
+        "preregistration_manifest_fingerprint",
+    )
+    _validate_replacement_policy(
+        selection=selection,
+        replacement_policy=replacement_policy,
+        preregistration_manifest_fingerprint=preregistration,
+    )
+    invalidity_map: dict[str, str] = {}
+    for case_id, reason_value in technical_invalidities:
+        case = _token(case_id, "invalid_case_id")
+        reason = _token(reason_value, "technical_invalidity_reason")
+        if case in invalidity_map:
+            raise HumanReviewProtocolR2Error("selected holdout case cannot have duplicate invalidity events")
+        if case not in selection.selected_case_ids:
+            raise HumanReviewProtocolR2Error("technical invalidity references case outside selected holdout")
+        if reason not in replacement_policy.allowed_technical_invalidity_reasons:
+            raise HumanReviewProtocolR2Error(
+                "technical invalidity reason is outside frozen replacement policy"
+            )
+        invalidity_map[case] = reason
+
+    invalid_selected = [
+        case_id for case_id in selection.selected_case_ids if case_id in invalidity_map
+    ]
+    if len(invalid_selected) > len(selection.fallback_case_ids):
+        raise HumanReviewProtocolR2Error("frozen fallback reservoir cannot cover technical invalidities")
+
+    fallback_iter = iter(selection.fallback_case_ids)
+    replacement_by_invalid: dict[str, str] = {}
+    events: list[HoldoutReplacementEventR2] = []
+    for fallback_ordinal, invalid_case_id in enumerate(invalid_selected):
+        replacement_case_id = next(fallback_iter)
+        reason = invalidity_map[invalid_case_id]
+        payload = {
+            "selection_manifest_fingerprint": selection.manifest_fingerprint,
+            "replacement_policy_fingerprint": holdout_replacement_policy_fingerprint(
+                replacement_policy
+            ),
+            "invalid_case_id": invalid_case_id,
+            "replacement_case_id": replacement_case_id,
+            "technical_invalidity_reason": reason,
+            "fallback_ordinal": fallback_ordinal,
+        }
+        event = HoldoutReplacementEventR2(
+            event_id=_fingerprint("holdout-replacement-event-r2", payload),
+            invalid_case_id=invalid_case_id,
+            replacement_case_id=replacement_case_id,
+            technical_invalidity_reason=reason,
+            fallback_ordinal=fallback_ordinal,
+            activation_authorized=False,
+        )
+        replacement_by_invalid[invalid_case_id] = replacement_case_id
+        events.append(event)
+
+    effective_case_ids = tuple(
+        replacement_by_invalid.get(case_id, case_id)
+        for case_id in selection.selected_case_ids
+    )
+    cohort_payload = {
+        "selection_manifest_fingerprint": selection.manifest_fingerprint,
+        "replacement_policy_fingerprint": holdout_replacement_policy_fingerprint(
+            replacement_policy
+        ),
+        "preregistration_manifest_fingerprint": preregistration,
+        "effective_case_ids": effective_case_ids,
+        "replacement_events": [asdict(item) for item in events],
+    }
+    return EffectiveHoldoutCohortR2(
+        cohort_id=_fingerprint("effective-holdout-cohort-r2", cohort_payload),
+        selection_manifest_fingerprint=selection.manifest_fingerprint,
+        replacement_policy_fingerprint=holdout_replacement_policy_fingerprint(
+            replacement_policy
+        ),
+        preregistration_manifest_fingerprint=preregistration,
+        effective_case_ids=effective_case_ids,
+        replacement_events=tuple(events),
+        activation_authorized=False,
+    )
 
 
 def _human_preference(
@@ -331,6 +438,7 @@ def _validate_attestation(
             "clean attestation curation_session_id does not match curation review"
         )
     exact_bindings = (
+        (attestation.observed_at, review.observed_at),
         (attestation.prior_case_exposure, review.prior_case_exposure),
         (attestation.judgment_mode, review.judgment_mode),
         (attestation.transition_execution_used, review.transition_execution_used),
@@ -342,13 +450,36 @@ def _validate_attestation(
     return attestation.clean_sequence_only
 
 
+def _validate_holdout_case_membership(
+    *,
+    case_binding: CurationCalibrationCaseR3,
+    effective_cohort: EffectiveHoldoutCohortR2,
+) -> None:
+    if (
+        case_binding.selection_manifest_fingerprint
+        != effective_cohort.selection_manifest_fingerprint
+    ):
+        raise HumanReviewProtocolR2Error("case binding does not match frozen holdout selection")
+    if (
+        case_binding.dataset_role
+        in (ReviewDatasetRole.PERSONAL_HOLDOUT, ReviewDatasetRole.GENERAL_HOLDOUT)
+        and case_binding.case.case_id not in effective_cohort.effective_case_ids
+    ):
+        raise HumanReviewProtocolR2Error("holdout case is outside effective frozen cohort")
+
+
 def build_curation_calibration_binding_r3(
     *,
     case_binding: CurationCalibrationCaseR3,
     review: CurationReviewR2,
     attestation: CurationCleanAttestationR2,
+    effective_cohort: EffectiveHoldoutCohortR2,
 ) -> CurationCalibrationBindingR3:
     _validate_attestation(review=review, attestation=attestation)
+    _validate_holdout_case_membership(
+        case_binding=case_binding,
+        effective_cohort=effective_cohort,
+    )
     payload = {
         "case_id": case_binding.case.case_id,
         "review_id": review.review_id,
@@ -374,8 +505,13 @@ def calibrate_curation_case_r3(
     review: CurationReviewR2,
     attestation: CurationCleanAttestationR2,
     comparison: ShadowPathComparison,
+    effective_cohort: EffectiveHoldoutCohortR2,
 ) -> CurationCalibrationEvidenceR3:
     """Calibrate only explicit curation preference; transition/execution are not inputs."""
+    _validate_holdout_case_membership(
+        case_binding=case_binding,
+        effective_cohort=effective_cohort,
+    )
     human = _human_preference(case_binding=case_binding, assignment=assignment, review=review)
     challenger = _challenger_preference(case_binding=case_binding, comparison=comparison)
     attested_clean = _validate_attestation(review=review, attestation=attestation)
@@ -402,8 +538,14 @@ def calibrate_curation_case_r3(
             reasons.append("curation_challenger_exact_agreement")
         else:
             reasons.append("curation_challenger_disagreement")
-        if human in (ResolvedCurationPreference.GREEDY, ResolvedCurationPreference.BEAM):
+        if (
+            human in (ResolvedCurationPreference.GREEDY, ResolvedCurationPreference.BEAM)
+            and case_binding.meaningful_difference_status
+            is MeaningfulDifferenceStatus.MEANINGFULLY_DISTINCT
+        ):
             decisive = human is challenger
+        elif human in (ResolvedCurationPreference.GREEDY, ResolvedCurationPreference.BEAM):
+            reasons.append("non_distinct_case_excluded_from_decisive_agreement")
     elif human is ResolvedCurationPreference.ABSTAIN:
         reasons.append("human_abstain_excluded_from_accuracy")
 
@@ -465,6 +607,7 @@ def build_curation_calibration_report_r3(
     case_evidence: tuple[CurationCalibrationEvidenceR3, ...],
     calibration_bindings: tuple[CurationCalibrationBindingR3, ...],
     selection: HoldoutSelectionResult,
+    effective_cohort: EffectiveHoldoutCohortR2,
     replacement_policy: HoldoutReplacementPolicyR2,
     preregistration_manifest_fingerprint: str,
     policy: CurationCalibrationPolicyR3 = CurationCalibrationPolicyR3(),
@@ -474,14 +617,24 @@ def build_curation_calibration_report_r3(
         raise HumanReviewProtocolR2Error(
             "general DJ validation requires the separate pre-registered cluster-aware analyzer"
         )
-    preregistration_fingerprint = _token(
+    preregistration = _token(
         preregistration_manifest_fingerprint,
         "preregistration_manifest_fingerprint",
     )
-    if replacement_policy.selection_manifest_fingerprint != selection.manifest_fingerprint:
-        raise HumanReviewProtocolR2Error("replacement policy does not bind to frozen holdout selection")
-    if replacement_policy.preregistration_manifest_fingerprint != preregistration_fingerprint:
-        raise HumanReviewProtocolR2Error("replacement policy does not bind to preregistration manifest")
+    _validate_replacement_policy(
+        selection=selection,
+        replacement_policy=replacement_policy,
+        preregistration_manifest_fingerprint=preregistration,
+    )
+    replacement_policy_fingerprint = holdout_replacement_policy_fingerprint(
+        replacement_policy
+    )
+    if effective_cohort.selection_manifest_fingerprint != selection.manifest_fingerprint:
+        raise HumanReviewProtocolR2Error("effective cohort does not bind to frozen holdout selection")
+    if effective_cohort.replacement_policy_fingerprint != replacement_policy_fingerprint:
+        raise HumanReviewProtocolR2Error("effective cohort does not bind to frozen replacement policy")
+    if effective_cohort.preregistration_manifest_fingerprint != preregistration:
+        raise HumanReviewProtocolR2Error("effective cohort does not bind to preregistration manifest")
 
     evidence = tuple(sorted(case_evidence, key=lambda item: (item.case_id, item.review_id)))
     bindings = tuple(sorted(calibration_bindings, key=lambda item: (item.case_id, item.review_id)))
@@ -512,9 +665,9 @@ def build_curation_calibration_report_r3(
     clean_case_ids = [item.case_id for item in clean]
     if len(set(clean_case_ids)) != len(clean_case_ids):
         raise HumanReviewProtocolR2Error("personal holdout case may contribute at most one clean review")
-    selected_case_ids = set(selection.selected_case_ids)
-    if any(case_id not in selected_case_ids for case_id in clean_case_ids):
-        raise HumanReviewProtocolR2Error("clean curation evidence references case outside frozen holdout selection")
+    effective_case_ids = set(effective_cohort.effective_case_ids)
+    if any(case_id not in effective_case_ids for case_id in clean_case_ids):
+        raise HumanReviewProtocolR2Error("clean curation evidence references case outside effective holdout cohort")
 
     reviewer_refs = {item.reviewer_ref for item in clean}
     if len(reviewer_refs) > 1:
@@ -528,10 +681,9 @@ def build_curation_calibration_report_r3(
     decisive = tuple(
         item
         for item in clean
-        if item.human_preference in (
-            ResolvedCurationPreference.GREEDY,
-            ResolvedCurationPreference.BEAM,
-        )
+        if item.human_preference
+        in (ResolvedCurationPreference.GREEDY, ResolvedCurationPreference.BEAM)
+        and item.meaningful_difference_status is MeaningfulDifferenceStatus.MEANINGFULLY_DISTINCT
     )
     human_ties = tuple(item for item in clean if item.human_preference is ResolvedCurationPreference.TIE)
 
@@ -539,10 +691,8 @@ def build_curation_calibration_report_r3(
     decisive_agreement_count = sum(item.decisive_agreement is True for item in decisive)
     false_winner_count = sum(
         item.human_preference is ResolvedCurationPreference.TIE
-        and item.challenger_preference in (
-            ResolvedCurationPreference.GREEDY,
-            ResolvedCurationPreference.BEAM,
-        )
+        and item.challenger_preference
+        in (ResolvedCurationPreference.GREEDY, ResolvedCurationPreference.BEAM)
         for item in human_ties
     )
 
@@ -554,7 +704,7 @@ def build_curation_calibration_report_r3(
 
     covered_roles = tuple(sorted({item.set_role for item in clean}, key=lambda item: item.value))
     missing_roles = tuple(role for role in CuratedSetRole if role not in covered_roles)
-    missing_selected_case_ids = selected_case_ids - set(clean_case_ids)
+    missing_effective_case_ids = effective_case_ids - set(clean_case_ids)
 
     explanations: list[str] = []
     incomplete = False
@@ -567,9 +717,9 @@ def build_curation_calibration_report_r3(
     if missing_roles:
         incomplete = True
         explanations.append("required_set_roles_missing")
-    if missing_selected_case_ids:
+    if missing_effective_case_ids:
         incomplete = True
-        explanations.append("frozen_holdout_cases_missing_clean_review")
+        explanations.append("effective_holdout_cases_missing_clean_review")
 
     if incomplete:
         verdict = CurationCalibrationVerdict.INCOMPLETE
@@ -604,9 +754,9 @@ def build_curation_calibration_report_r3(
     payload = {
         "policy": asdict(policy),
         "selection_manifest_fingerprint": selection.manifest_fingerprint,
-        "selected_case_ids": sorted(selection.selected_case_ids),
-        "replacement_policy_fingerprint": holdout_replacement_policy_fingerprint(replacement_policy),
-        "preregistration_manifest_fingerprint": preregistration_fingerprint,
+        "replacement_policy_fingerprint": replacement_policy_fingerprint,
+        "preregistration_manifest_fingerprint": preregistration,
+        "effective_cohort": asdict(effective_cohort),
         "calibration_bindings": [asdict(item) for item in bindings],
         "clean_case_evidence": [
             {
@@ -655,6 +805,7 @@ __all__ = [
     "HumanReviewProtocolR2Error",
     "build_curation_calibration_binding_r3",
     "build_curation_calibration_report_r3",
+    "build_effective_holdout_cohort_r2",
     "calibrate_curation_case_r3",
     "curation_clean_attestation_fingerprint",
     "holdout_replacement_policy_fingerprint",
