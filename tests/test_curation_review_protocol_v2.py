@@ -318,7 +318,11 @@ def test_development_calibration_cannot_claim_independent_validation() -> None:
 
     assert report.independent_validation is False
     assert report.representative_performance_claim_allowed is False
-    assert "development_result_requires_fresh_holdout_validation" in report.explanation_codes
+    assert "development_evidence_not_independent_validation" in report.explanation_codes
+    if report.verdict is CalibrationVerdict.SUPPORTS_FURTHER_EVALUATION:
+        assert "development_result_requires_fresh_holdout_validation" in report.explanation_codes
+    else:
+        assert "development_result_requires_fresh_holdout_validation" not in report.explanation_codes
 
 
 def test_non_reviewable_system_failures_stay_in_denominator_and_are_negative_evidence() -> None:
