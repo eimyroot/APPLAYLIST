@@ -17,12 +17,13 @@ The runner must stop before human labels are collected unless all pre-label evid
 7. Freeze replacement policy and effective cohort.
 8. Compute Bundle 67 competitive-curation shadow comparisons for the selected cases and frozen fallback reservoir before reviewer workspace publication.
 9. Persist a private pre-registration manifest containing selection, assignments, challenger evidence, fingerprints, and authority=false.
-10. Before finalization, verify byte identity of the generated private manifest, reviewer packet, and CSV against their pre-finalization SHA-256 values.
-11. Require reviewer case order/identity to match the frozen effective cohort exactly, with assignment and set-role metadata matching private frozen evidence.
-12. Apply dual prior-exposure exclusion: reviewer-visible sequence matching plus stable track-ID matching from prior private manifests.
-13. Finalize a reviewer-safe workspace bound to the exact preregistration/selection/cohort and exposure-registry fingerprints.
-14. Publish a reviewer-safe packet containing only anonymous Plan A / Plan B track sequences and the four R2 curation dimensions.
-15. Create the review CSV with system binding metadata but leave all human judgments and clean-attestation assertions empty; no ratings, preferences, confidence, timestamps, or exposure claims may be fabricated.
+10. Require zero replacement events in the R1 effective cohort before reviewer publication.
+11. Before finalization, verify byte identity of the generated private manifest, reviewer packet, and CSV against their pre-finalization SHA-256 values.
+12. Require reviewer case order/identity to match the frozen effective cohort exactly, with assignment and set-role metadata matching private frozen evidence.
+13. Apply dual prior-exposure exclusion: reviewer-visible sequence matching plus stable track-ID matching from prior private manifests.
+14. Finalize a reviewer-safe workspace bound to the exact preregistration/selection/cohort and exposure-registry fingerprints.
+15. Publish a reviewer-safe packet containing only anonymous Plan A / Plan B track sequences and the four R2 curation dimensions.
+16. Create the review CSV with system binding metadata but leave all human judgments and clean-attestation assertions empty; no ratings, preferences, confidence, timestamps, or exposure claims may be fabricated.
 
 ## Critical isolation
 
@@ -35,7 +36,9 @@ The runner must stop before human labels are collected unless all pre-label evid
 - competitive challenger scores;
 - competitive challenger preference.
 
-The challenger comparison is computed only after holdout selection is frozen, but before reviewer workspace publication. Challenger evidence is also frozen for the fallback reservoir so a later technical replacement cannot trigger post-label challenger computation.
+The challenger comparison is computed only after holdout selection is frozen, but before reviewer workspace publication. Challenger evidence is also frozen for the fallback reservoir so a later protocol version can support bounded technical replacement without post-label challenger computation.
+
+For **Fresh Personal Holdout Run R1**, the effective cohort is immutable once reviewer workspace publication begins. A technical invalidity discovered after publication aborts/restarts the run; it does not authorize an in-review fallback substitution.
 
 ## Freshness / prior-exposure rule
 
