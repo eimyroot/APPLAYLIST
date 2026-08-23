@@ -13,6 +13,10 @@ from core.intelligence.curated_real_library_review_contract import (
     BlindedPlanAssignment,
     CuratedSetRole,
 )
+from core.intelligence.human_review_preregistration_r2_contract import (
+    CurationCleanAttestationR2,
+    HoldoutReplacementPolicyR2,
+)
 from core.intelligence.human_review_protocol_r2_contract import (
     Assessability,
     CurationCalibrationCaseR3,
@@ -63,6 +67,14 @@ def _token(value: str, field: str) -> str:
     if not normalized:
         raise HumanReviewProtocolR2Error(f"{field} must not be empty")
     return normalized
+
+
+def curation_clean_attestation_fingerprint(attestation: CurationCleanAttestationR2) -> str:
+    return _fingerprint("curation-clean-attestation-r2", asdict(attestation))
+
+
+def holdout_replacement_policy_fingerprint(policy: HoldoutReplacementPolicyR2) -> str:
+    return _fingerprint("holdout-replacement-policy-r2", asdict(policy))
 
 
 def transition_review_spec_fingerprint(spec: TransitionReviewSpecR2) -> str:
@@ -224,29 +236,21 @@ def select_holdout_cases_r2(
 def replacement_case_r2(
     *,
     selection: HoldoutSelectionResult,
+    replacement_policy: HoldoutReplacementPolicyR2,
     invalid_case_id: str,
     technical_invalidity_reason: str,
-    allowed_technical_invalidity_reasons: tuple[str, ...],
     already_used_fallback_case_ids: tuple[str, ...] = (),
 ) -> str:
-    """Return only the next frozen fallback for a pre-registered technical invalidity."""
+    """Return only the next frozen fallback under the frozen replacement policy."""
+    if replacement_policy.selection_manifest_fingerprint != selection.manifest_fingerprint:
+        raise HumanReviewProtocolR2Error("replacement policy does not bind to frozen holdout selection")
     if invalid_case_id not in selection.selected_case_ids:
         raise HumanReviewProtocolR2Error("replacement target must be a selected holdout case")
     reason = _token(technical_invalidity_reason, "technical_invalidity_reason")
-    allowed = tuple(_token(item, "allowed_technical_invalidity_reason") for item in allowed_technical_invalidity_reasons)
-    if reason not in allowed:
-        raise HumanReviewProtocolR2Error("replacement reason is outside pre-registered technical invalidity reasons")
-    forbidden_reason_tokens = (
-        "preference",
-        "rating",
-        "score",
-        "challenger",
-        "human",
-        "like",
-        "dislike",
-    )
-    if any(token in reason.lower() for token in forbidden_reason_tokens):
-        raise HumanReviewProtocolR2Error("replacement reason is preference/challenger contaminated")
+    if reason not in replacement_policy.allowed_technical_invalidity_reasons:
+        raise HumanReviewProtocolR2Error(
+            "replacement reason is outside frozen pre-registered technical invalidity reasons"
+        )
     used = set(already_used_fallback_case_ids)
     if not used.issubset(set(selection.fallback_case_ids)):
         raise HumanReviewProtocolR2Error("used fallback case id is outside frozen fallback reservoir")
@@ -314,29 +318,51 @@ def _challenger_preference(
     raise HumanReviewProtocolR2Error("unsupported shadow preference")
 
 
+def _validate_attestation(
+    *,
+    review: CurationReviewR2,
+    attestation: CurationCleanAttestationR2,
+) -> bool:
+    if attestation.review_id != review.review_id:
+        raise HumanReviewProtocolR2Error("clean attestation review_id does not match curation review")
+    if attestation.curation_session_id != review.curation_session_id:
+        raise HumanReviewProtocolR2Error(
+            "clean attestation curation_session_id does not match curation review"
+        )
+    exact_bindings = (
+        (attestation.prior_case_exposure, review.prior_case_exposure),
+        (attestation.judgment_mode, review.judgment_mode),
+        (attestation.transition_execution_used, review.transition_execution_used),
+        (attestation.transition_preview_heard, review.transition_preview_heard),
+        (attestation.algorithm_identity_was_hidden, review.algorithm_identity_was_hidden),
+    )
+    if any(left != right for left, right in exact_bindings):
+        raise HumanReviewProtocolR2Error("clean attestation facts do not exactly bind to curation review")
+    return attestation.clean_sequence_only
+
+
 def calibrate_curation_case_r3(
     *,
     case_binding: CurationCalibrationCaseR3,
     assignment: BlindedPlanAssignment,
     review: CurationReviewR2,
+    attestation: CurationCleanAttestationR2,
     comparison: ShadowPathComparison,
-    clean_sequence_attestation: bool,
 ) -> CurationCalibrationEvidenceR3:
     """Calibrate only explicit curation preference; transition/execution are not inputs."""
     human = _human_preference(case_binding=case_binding, assignment=assignment, review=review)
     challenger = _challenger_preference(case_binding=case_binding, comparison=comparison)
+    attested_clean = _validate_attestation(review=review, attestation=attestation)
 
     clean = bool(
-        clean_sequence_attestation
+        attested_clean
         and case_binding.dataset_role
         in (ReviewDatasetRole.PERSONAL_HOLDOUT, ReviewDatasetRole.GENERAL_HOLDOUT)
         and review.clean_holdout_eligible
     )
-    reasons: list[str] = []
-    if not clean_sequence_attestation:
-        reasons.append("explicit_clean_sequence_attestation_missing")
-    else:
-        reasons.append("explicit_clean_sequence_attestation_present")
+    reasons: list[str] = ["curation_clean_attestation_bound"]
+    if not attested_clean:
+        reasons.append("curation_clean_attestation_not_clean_sequence_only")
     if case_binding.dataset_role is ReviewDatasetRole.DEVELOPMENT_REGRESSION:
         reasons.append("development_regression_case_excluded_from_holdout_metrics")
     if not review.clean_holdout_eligible:
@@ -412,6 +438,7 @@ def build_curation_calibration_report_r3(
     *,
     case_evidence: tuple[CurationCalibrationEvidenceR3, ...],
     selection: HoldoutSelectionResult,
+    replacement_policy: HoldoutReplacementPolicyR2,
     preregistration_manifest_fingerprint: str,
     policy: CurationCalibrationPolicyR3 = CurationCalibrationPolicyR3(),
 ) -> CurationCalibrationReportR3:
@@ -424,6 +451,10 @@ def build_curation_calibration_report_r3(
         preregistration_manifest_fingerprint,
         "preregistration_manifest_fingerprint",
     )
+    if replacement_policy.selection_manifest_fingerprint != selection.manifest_fingerprint:
+        raise HumanReviewProtocolR2Error("replacement policy does not bind to frozen holdout selection")
+    if replacement_policy.preregistration_manifest_fingerprint != preregistration_fingerprint:
+        raise HumanReviewProtocolR2Error("replacement policy does not bind to preregistration manifest")
 
     evidence = tuple(sorted(case_evidence, key=lambda item: (item.case_id, item.review_id)))
     if not evidence:
@@ -533,6 +564,7 @@ def build_curation_calibration_report_r3(
         "policy": asdict(policy),
         "selection_manifest_fingerprint": selection.manifest_fingerprint,
         "selected_case_ids": sorted(selection.selected_case_ids),
+        "replacement_policy_fingerprint": holdout_replacement_policy_fingerprint(replacement_policy),
         "preregistration_manifest_fingerprint": preregistration_fingerprint,
         "clean_case_evidence": [
             {
@@ -581,6 +613,8 @@ __all__ = [
     "HumanReviewProtocolR2Error",
     "build_curation_calibration_report_r3",
     "calibrate_curation_case_r3",
+    "curation_clean_attestation_fingerprint",
+    "holdout_replacement_policy_fingerprint",
     "not_assessable_transition_dimension",
     "replacement_case_r2",
     "select_holdout_cases_r2",
