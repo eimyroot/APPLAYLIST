@@ -9,6 +9,7 @@ from core.intelligence.competitive_curation_contract import (
     ShadowPathPreference,
 )
 from core.intelligence.curated_real_library_review_contract import (
+    REQUIRED_HUMAN_REVIEW_DIMENSIONS_R1,
     BlindedPlanAssignment,
     CuratedReviewCase,
     HumanDJReview,
@@ -53,6 +54,22 @@ def _path_strategy_map(case: CuratedReviewCase) -> dict[str, ResolvedPreference]
     }
 
 
+def _validate_complete_human_review(review: HumanDJReview) -> None:
+    if not review.algorithm_identity_was_hidden:
+        raise HumanPreferenceCalibrationError(
+            "calibration requires genuinely blinded human review evidence"
+        )
+    dimensions = tuple(item.dimension for item in review.ratings)
+    if len(dimensions) != len(REQUIRED_HUMAN_REVIEW_DIMENSIONS_R1) or set(dimensions) != set(
+        REQUIRED_HUMAN_REVIEW_DIMENSIONS_R1
+    ):
+        raise HumanPreferenceCalibrationError(
+            "calibration requires all Bundle 63 human review dimensions"
+        )
+    if review.activation_authorized:
+        raise HumanPreferenceCalibrationError("human review exceeds R2 authority")
+
+
 def _resolve_human_preference(
     *,
     case: CuratedReviewCase,
@@ -63,8 +80,11 @@ def _resolve_human_preference(
         raise HumanPreferenceCalibrationError("blind assignment case_id does not match review case")
     if review.assignment_id != assignment.assignment_id:
         raise HumanPreferenceCalibrationError("human review assignment_id does not match blind assignment")
-    if not assignment.algorithm_identity_hidden or not review.algorithm_identity_was_hidden:
-        raise HumanPreferenceCalibrationError("calibration requires genuinely blinded human review evidence")
+    if not assignment.algorithm_identity_hidden:
+        raise HumanPreferenceCalibrationError(
+            "calibration requires genuinely blinded human review evidence"
+        )
+    _validate_complete_human_review(review)
 
     by_plan = _plan_strategy_map(case)
     expected_plan_ids = set(by_plan)
