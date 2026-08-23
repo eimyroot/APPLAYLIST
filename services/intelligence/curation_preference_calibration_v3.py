@@ -10,6 +10,11 @@ from core.intelligence.curated_real_library_review_contract import (
     CuratedReviewCase,
     ReviewPlanStrategy,
 )
+from core.intelligence.curation_holdout_guard_contract import (
+    CurationAssignmentBatchManifest,
+    DevelopmentEvidenceExclusionRegistry,
+    HoldoutSelectionBasis,
+)
 from core.intelligence.curation_review_v2_contract import (
     CurationBlindAssignmentV2,
     CurationCalibrationPolicyV3,
@@ -25,6 +30,11 @@ from core.intelligence.curation_review_v2_contract import (
     SelectionScope,
 )
 from core.intelligence.human_preference_calibration_contract import CalibrationVerdict, ResolvedPreference
+from services.intelligence.curation_holdout_guard_v1 import (
+    CurationHoldoutGuardError,
+    validate_assignment_batch,
+    validate_holdout_lineage,
+)
 
 
 class CurationPreferenceCalibrationV3Error(ValueError):
@@ -236,6 +246,10 @@ def build_curation_calibration_report_v3(
     evaluation_scope: EvaluationScope,
     policy: CurationCalibrationPolicyV3 = CurationCalibrationPolicyV3(),
     holdout_manifest: HoldoutValidationManifest | None = None,
+    development_exclusion_registry: DevelopmentEvidenceExclusionRegistry | None = None,
+    selection_basis: HoldoutSelectionBasis | None = None,
+    assignment_batch_manifest: CurationAssignmentBatchManifest | None = None,
+    assignment_private_seed: str | None = None,
     expected_source_optimizer_sha: str = "development",
     expected_challenger_sha: str = "development",
     expected_challenger_config_digest: str = "development",
@@ -249,9 +263,30 @@ def build_curation_calibration_report_v3(
         raise CurationPreferenceCalibrationV3Error("source case identities must be unique")
     cases_by_id = {item.case_id: item for item in cases}
 
+    holdout_guard_values = (
+        development_exclusion_registry,
+        selection_basis,
+        assignment_batch_manifest,
+        assignment_private_seed,
+    )
     if evidence_role is EvidenceRole.HOLDOUT_VALIDATION:
         if holdout_manifest is None:
             raise CurationPreferenceCalibrationV3Error("holdout validation requires frozen manifest")
+        if any(item is None for item in holdout_guard_values):
+            raise CurationPreferenceCalibrationV3Error(
+                "holdout validation requires development exclusion, selection basis, and assignment proof"
+            )
+        assert development_exclusion_registry is not None
+        assert selection_basis is not None
+        assert assignment_batch_manifest is not None
+        assert assignment_private_seed is not None
+        if holdout_manifest.case_selection_policy_ref != (
+            selection_basis.basis_id,
+            selection_basis.basis_version,
+        ):
+            raise CurationPreferenceCalibrationV3Error(
+                "holdout selection basis does not match frozen selection policy ref"
+            )
         _validate_holdout_binding(
             cases=cases,
             manifest=holdout_manifest,
@@ -260,12 +295,31 @@ def build_curation_calibration_report_v3(
             expected_challenger_config_digest=expected_challenger_config_digest,
             expected_calibration_policy_digest=expected_calibration_policy_digest,
         )
+        try:
+            validate_holdout_lineage(
+                cases=cases,
+                holdout_manifest=holdout_manifest,
+                development_registry=development_exclusion_registry,
+                selection_basis=selection_basis,
+            )
+            validate_assignment_batch(
+                cases=cases,
+                assignments=assignments,
+                manifest=assignment_batch_manifest,
+                private_seed=assignment_private_seed,
+            )
+        except CurationHoldoutGuardError as exc:
+            raise CurationPreferenceCalibrationV3Error(str(exc)) from exc
         selection_scope: SelectionScope | None = holdout_manifest.selection_scope
         independent_validation = True
         representative_allowed = selection_scope is SelectionScope.REPRESENTATIVE_HOLDOUT
     else:
         if holdout_manifest is not None:
             raise CurationPreferenceCalibrationV3Error("development evidence cannot bind a holdout manifest")
+        if any(item is not None for item in holdout_guard_values):
+            raise CurationPreferenceCalibrationV3Error(
+                "development evidence cannot bind holdout-only guard artifacts"
+            )
         selection_scope = None
         independent_validation = False
         representative_allowed = False
