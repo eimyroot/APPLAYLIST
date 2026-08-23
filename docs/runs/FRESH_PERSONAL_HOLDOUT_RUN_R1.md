@@ -76,6 +76,12 @@ The pre-finalization SHA-256 values of the generated private manifest, reviewer 
 
 Do not open Case 1 if either exposure exclusion layer or any binding check failed.
 
+## Cohort immutability during review
+
+Fresh Personal Holdout Run R1 requires zero replacement events before reviewer publication. Once the reviewer workspace is finalized, the 24-case effective cohort is immutable for that run.
+
+If any selected case later becomes technically invalid, do **not** substitute a fallback during human review. Abort the run and create a new preregistered fresh holdout instead. The frozen fallback reservoir exists as pre-label provenance/future protocol support, not as authority for an in-review swap in R1.
+
 ## Stop gate before Case 1
 
 Before opening the reviewer packet, verify:
@@ -85,6 +91,7 @@ Before opening the reviewer packet, verify:
 - working tree was clean at run start;
 - selected holdout has 24 effective cases;
 - all six set roles are represented with four cases each;
+- effective cohort has zero replacement events before publication;
 - reviewer case order/identity exactly matches the frozen effective cohort;
 - replacement policy and effective cohort fingerprints are frozen;
 - challenger comparisons for selected + fallback cases are present in private evidence and absent from reviewer-safe outputs;
