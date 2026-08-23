@@ -12,6 +12,7 @@ Execute a fresh personal blind curation holdout only after Bundle 70 is merged.
 - private `applaylist-local-library-snapshot-r1` JSON;
 - local audio files remain readable;
 - one or more prior blinded reviewer packets covering sequences already exposed to the reviewer, including the historical 12-case packet;
+- one or more prior private review manifests carrying stable track-identity sequence evidence, including the historical real-library private manifest;
 - no reviewer labels have been collected for the new run;
 - sampling and blinding seeds are chosen before review.
 
@@ -26,8 +27,11 @@ python scripts/applaylist_fresh_personal_holdout.py \
   --generated-at "$GENERATED_AT" \
   --sampling-seed "$SAMPLING_SEED" \
   --blinding-seed "$BLINDING_SEED" \
-  --prior-review-packet "$PRIOR_REVIEW_PACKET"
+  --exclude-reviewer-packet "$PRIOR_REVIEW_PACKET" \
+  --exclude-private-manifest "$PRIOR_PRIVATE_MANIFEST"
 ```
+
+Both exclusion arguments are repeatable when more than one earlier exposure source must be covered.
 
 The runner must fail closed before evidence generation if the checkout is not the exact canonical commit or the working tree is dirty.
 
@@ -36,7 +40,7 @@ The runner must fail closed before evidence generation if the checkout is not th
 - `APPLAYLIST_FRESH_PERSONAL_HOLDOUT_R1.private.json`
 - local SQLite database
 
-The private manifest includes frozen selection, replacement/effective-cohort provenance, blind assignments, and challenger evidence for the selected + fallback reservoir. Challenger evidence must be frozen before the reviewer workspace is published.
+The private manifest includes frozen selection, replacement/effective-cohort provenance, blind assignments, challenger evidence for the selected + fallback reservoir, and after workspace finalization an opaque stable-exposure registry for future holdout runs. Challenger evidence must be frozen before the reviewer workspace is published.
 
 These outputs must not be published to a public repository because the private manifest is bound to local evidence and may contain private provenance.
 
@@ -56,14 +60,21 @@ The CSV contains system binding fields and explicit R2 clean-attestation columns
 
 ## Prior-exposure exclusion
 
-A case is not fresh merely because it has a new case identifier.
+A case is not fresh merely because it has a new case identifier or because display metadata changed.
 
-Before the reviewer workspace is finalized, the runner must compare every effective Plan A / Plan B sequence against the supplied prior blinded reviewer packet(s). It must fail closed if an effective holdout case reproduces:
+Before the reviewer workspace is finalized, the runner performs two independent exclusion checks:
+
+1. reviewer-visible sequence matching against prior blinded reviewer packets;
+2. stable track-ID sequence matching against prior private manifests.
+
+It must fail closed if an effective holdout case reproduces:
 
 - any exact previously exposed individual plan sequence; or
 - any exact previously exposed A/B sequence pair.
 
-Do not open Case 1 if prior-exposure exclusion was not performed successfully.
+The pre-finalization SHA-256 values of the generated private manifest, reviewer packet, and CSV are also verified before the finalizer is allowed to bind them. The reviewer case order/identity must exactly equal the frozen effective cohort, and reviewer assignment/set-role metadata must match the private frozen evidence.
+
+Do not open Case 1 if either exposure exclusion layer or any binding check failed.
 
 ## Stop gate before Case 1
 
@@ -74,9 +85,10 @@ Before opening the reviewer packet, verify:
 - working tree was clean at run start;
 - selected holdout has 24 effective cases;
 - all six set roles are represented with four cases each;
+- reviewer case order/identity exactly matches the frozen effective cohort;
 - replacement policy and effective cohort fingerprints are frozen;
 - challenger comparisons for selected + fallback cases are present in private evidence and absent from reviewer-safe outputs;
-- prior-exposure registry was applied and no effective plan duplicates an exposed sequence;
+- reviewer-visible and stable track-ID prior-exposure registries were both applied successfully;
 - reviewer packet is bound to the frozen preregistration/selection/effective-cohort fingerprints;
 - all human review and clean-attestation fields are empty at freeze;
 - algorithm identity is hidden;
