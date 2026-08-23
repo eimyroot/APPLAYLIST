@@ -378,8 +378,12 @@ def build_curation_calibration_report_v3(
 
     disagreement_cases = 0
     multi_review_cases = 0
-    for case_id, case_reviews in reviews_by_case.items():
-        preferences = [review.preference for review in case_reviews if review.preference is not CurationPreference.ABSTAIN]
+    for case_reviews in reviews_by_case.values():
+        preferences = [
+            review.preference
+            for review in case_reviews
+            if review.preference is not CurationPreference.ABSTAIN
+        ]
         if len(preferences) >= 2:
             multi_review_cases += 1
             if len(set(preferences)) > 1:
@@ -395,9 +399,14 @@ def build_curation_calibration_report_v3(
     covered_roles = tuple(sorted({item.set_role for item in cases}, key=lambda item: item.value))
     missing_roles = tuple(role for role in policy.required_set_roles if role not in covered_roles)
     outcome_counter = Counter(item.outcome for item in system_outcomes)
-    outcome_counts = tuple((outcome, outcome_counter.get(outcome, 0)) for outcome in HoldoutSystemOutcome)
+    outcome_counts = tuple(
+        (outcome, outcome_counter.get(outcome, 0)) for outcome in HoldoutSystemOutcome
+    )
 
     explanations: list[str] = []
+    if evidence_role is EvidenceRole.DEVELOPMENT_CALIBRATION:
+        explanations.append("development_evidence_not_independent_validation")
+
     incomplete = False
     if selected_count < policy.minimum_cases:
         incomplete = True
@@ -470,7 +479,10 @@ def build_curation_calibration_report_v3(
                 item.challenger_preference.value,
                 item.confidence,
             )
-            for item in sorted(calibration_evidence, key=lambda value: (value.case_id, value.review_id))
+            for item in sorted(
+                calibration_evidence,
+                key=lambda value: (value.case_id, value.review_id),
+            )
         ],
     }
 
@@ -503,7 +515,12 @@ def build_curation_calibration_report_v3(
         covered_set_roles=covered_roles,
         missing_set_roles=missing_roles,
         outcome_counts=outcome_counts,
-        case_evidence=tuple(sorted(calibration_evidence, key=lambda value: (value.case_id, value.review_id))),
+        case_evidence=tuple(
+            sorted(
+                calibration_evidence,
+                key=lambda value: (value.case_id, value.review_id),
+            )
+        ),
         verdict=verdict,
         explanation_codes=tuple(explanations),
         activation_authorized=False,
