@@ -5,6 +5,9 @@ import json
 import subprocess
 from pathlib import Path
 
+from services.intelligence.fresh_holdout_reviewer_workspace import (
+    finalize_fresh_holdout_reviewer_workspace,
+)
 from services.intelligence.fresh_personal_holdout_runner import (
     FreshPersonalHoldoutRunnerError,
     materialize_fresh_personal_holdout_r1,
@@ -87,6 +90,7 @@ def main() -> int:
         candidate_scope_size=args.candidate_scope_size,
         fallback_count=args.fallback_count,
     )
+    result = finalize_fresh_holdout_reviewer_workspace(result)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
