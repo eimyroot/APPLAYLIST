@@ -1,5 +1,7 @@
 # APPLAYLIST
 
+> **Portfolio status:** Public mirror / reference snapshot. Canonical development is in `nulleimy/APPLAYLIST`; this repository is not yet product-ready.
+
 APPLAYLIST is a local-first DJ preparation product that turns a selected local music library into an explainable, editable and interoperable DJ set.
 
 ```text
