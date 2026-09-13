@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${1:-nulleimy/APPLAYLIST}"
+REPO="${1:-eimyroot/APPLAYLIST}"
 BASE_BRANCH="${2:-}"
 ISSUE_NUMBER="${3:-}"
 LABELS="${4:-bundle,automation}"
