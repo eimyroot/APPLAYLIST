@@ -20,7 +20,7 @@ bash -n scripts/create_bundle_pr.sh
 bash -n scripts/verify_bundle_15.sh
 
 echo "[5/5] helper smoke"
-scripts/create_bundle_pr.sh nulleimy/APPLAYLIST feature/bundle-14-observability-polish 4 "bundle,automation,docs" >/tmp/bundle15_pr_helper.txt
+scripts/create_bundle_pr.sh eimyroot/APPLAYLIST feature/bundle-14-observability-polish 4 "bundle,automation,docs" >/tmp/bundle15_pr_helper.txt
 grep -q "Bundle 15:" /tmp/bundle15_pr_helper.txt
 grep -q "Base branch: feature/bundle-14-observability-polish" /tmp/bundle15_pr_helper.txt
 
