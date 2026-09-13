@@ -1,6 +1,6 @@
 # APPLAYLIST
 
-> **Portfolio status:** Public mirror / reference snapshot. Canonical development is in `nulleimy/APPLAYLIST`; this repository is not yet product-ready.
+> **Portfolio status:** Product prototype / pre-release engineering. This repository is not yet product-ready.
 
 APPLAYLIST is a local-first DJ preparation product that turns a selected local music library into an explainable, editable and interoperable DJ set.
 
@@ -14,7 +14,7 @@ select local library
 
 ## Current status
 
-- Canonical repository: `nulleimy/APPLAYLIST`
+- Repository: `eimyroot/APPLAYLIST`
 - Canonical branch: `feature/bundle-0-bootstrap`
 - Current merged checkpoint: **Bundle 46 — MIR Benchmark Harness**
 - Active architecture slice: **Bundle 47 — Desktop Shell Architecture and Security ADR**
