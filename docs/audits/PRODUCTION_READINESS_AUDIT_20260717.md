@@ -10,7 +10,7 @@ This does **not** mean the complete product is production-ready. Provider execut
 
 ## Canonical Source of Truth
 
-The canonical source is the GitHub repository `nulleimy/APPLAYLIST`.
+The canonical source is the GitHub repository `eimyroot/APPLAYLIST`.
 
 Google Drive copies are historical snapshots or donor material. At least one Drive snapshot contains `.git`, `.venv`, `.env`, SQLite data, caches, backups and duplicate `* 2.py` files. It must not be merged back as a complete working tree.
 
