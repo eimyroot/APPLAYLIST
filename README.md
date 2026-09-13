@@ -1,15 +1,24 @@
-# APPLAYLIST
+<div align="center">
+  <h1>APPLAYLIST</h1>
+  <p><strong>Local-first DJ set preparation built around explainable analysis, editable sequencing and portable export.</strong></p>
+  <p>
+    <img alt="Python" src="https://img.shields.io/badge/Python-3.11–3.12-3776AB?logo=python&logoColor=white">
+    <img alt="Local first" src="https://img.shields.io/badge/local--first-workflow-18181b">
+    <img alt="MIR" src="https://img.shields.io/badge/audio-MIR-7c3aed">
+    <img alt="Status" src="https://img.shields.io/badge/status-product%20prototype-f59e0b">
+  </p>
+</div>
 
 > **Portfolio status:** Product prototype / pre-release engineering. This repository is not yet product-ready.
 
 APPLAYLIST is a local-first DJ preparation product that turns a selected local music library into an explainable, editable and interoperable DJ set.
 
-```text
-select local library
-→ import and analyze tracks
-→ build an explainable constrained set
-→ inspect and edit transitions
-→ export to an existing DJ workflow
+```mermaid
+flowchart LR
+    A[Local music library] --> B[Analyze BPM · key · energy]
+    B --> C[Build explainable set]
+    C --> D[Edit · lock · reorder]
+    D --> E[Export approved playlist]
 ```
 
 ## Current status
